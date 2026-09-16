@@ -9,10 +9,10 @@ export interface SopStep {
 
 export const incidentSop: Record<IncidentType, SopStep[]> = {
   stranded: [
-    { owner: 'security', action: '立即到场寻人（卫生间、书架间、亲子区），确认人身安全' },
-    { owner: 'service', action: '登记身份、联系家属，必要时提供热水/休息' },
-    { owner: 'admin', action: '夜间滞留按预案处置：劝离或安置，记录信用扣分' },
-    { owner: 'security', action: '清场复核签字后闭馆；次日服务岗谈话跟进' }
+    { owner: 'security', action: '闭馆后滞留扫描比对门禁出闸记录，立即到场寻人（卫生间、书架间、亲子区），确认人身安全，记录安保位置与到场时间' },
+    { owner: 'service', action: '登记身份与门禁记录、记录读者解释；未成年读者必须立即联系监护人并保留沟通结果，通知监护人接回' },
+    { owner: 'admin', action: '确认处置方式：劝离 / 特殊延时（安保看护）/ 报警（同步街道），记录决策' },
+    { owner: 'security', action: '记录读者最终离馆时间与方式（自行/监护人接回/陪同/民警带离）；处置闭环并信用扣分后，人员交接方可签字' }
   ],
   'demag-failed': [
     { owner: 'service', action: '安抚读者、人工暂扣图书并登记，开人工通道放行' },

@@ -15,6 +15,11 @@ coverage/
 *.db
 *.sqlite
 *.sqlite3
+*.pem
+*.key
+*secret*
+*token*
+*credential*
 
 # Editor, test, and agent artifacts
 .DS_Store

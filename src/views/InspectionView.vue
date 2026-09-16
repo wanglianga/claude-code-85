@@ -10,8 +10,10 @@ import { fmtCountdown, fmtDateTime, fmtTime } from '@/utils/format'
 import { incidentTypeMeta, severityMeta } from '@/data/meta'
 import { useIncidentViewer } from '@/composables/useIncidentViewer'
 import { useArchiveViewer } from '@/composables/useArchiveViewer'
+import { useStrandedViewer } from '@/composables/useStrandedViewer'
+import { useStrandedStore } from '@/stores/stranded'
 import { useToast } from '@/composables/useToast'
-import type { CheckItem, CheckState, Incident } from '@/types'
+import type { CheckItem, CheckState, Incident, Visit } from '@/types'
 
 const system = useSystemStore()
 const inspStore = useInspectionStore()
@@ -22,6 +24,8 @@ const toast = useToast()
 const { now } = storeToRefs(system)
 const incidentViewer = useIncidentViewer()
 const archiveViewer = useArchiveViewer()
+const strandedViewer = useStrandedViewer()
+const strandedStore = useStrandedStore()
 
 const lib = computed(() => system.currentLibrary)
 /** 当前营业日巡检单（次日开馆后为新日期的新单，绝不是旧单“进行中”） */
@@ -30,9 +34,30 @@ const prog = computed(() => inspStore.progress(insp.value))
 const archiveList = computed(() => inspStore.archives(lib.value.id))
 
 const activeVisits = computed(() => branch.activeVisits(lib.value.id))
-const strandedVisits = computed(() =>
-  branch.visits.filter((v) => v.libraryId === lib.value.id && v.stranded && !v.resolved)
+/** 闭馆后发现、尚未闭环的夜间滞留 */
+const pendingStranded = computed(() => strandedStore.unresolved(lib.value.id))
+/** 本夜已闭环的滞留处置（随档案留存，次日可查） */
+const handledStranded = computed(() =>
+  strandedStore.strandedVisits(lib.value.id).filter((v) => v.strandedHandling!.status === 'left')
 )
+const strandedVisits = computed(() => strandedStore.strandedVisits(lib.value.id))
+
+/** 闭馆后一键扫描：把仍在馆的读者全部登记为夜间滞留 */
+function scanStranded() {
+  const here = activeVisits.value
+  if (!here.length) {
+    toast.ok('扫描完成：在馆人员已清零')
+    return
+  }
+  for (const v of here) {
+    strandedStore.discover({ visitId: v.id, at: now.value })
+  }
+  toast.bad(`扫描发现 ${here.length} 名读者闭馆后未离馆，已生成夜间滞留处置单`)
+}
+
+function openStranded(v: Visit) {
+  strandedViewer.open(v.id)
+}
 
 const handoverItems = computed(() => insp.value.items.filter((i) => i.scope === 'handover'))
 const unmannedItems = computed(() => insp.value.items.filter((i) => i.scope === 'unmanned'))
@@ -103,17 +128,8 @@ function evacuate(visitId: string, name: string) {
 function createStrandedIncident(visitId: string) {
   const v = branch.visits.find((x) => x.id === visitId)
   if (!v) return
-  v.stranded = true
-  const inc = incStore.create({
-    libraryId: lib.value.id,
-    type: 'stranded',
-    severity: 'high',
-    title: `闭馆清场发现读者滞留：${v.readerName}`,
-    detail: `闭馆巡检清场时在座位 ${v.seatNo} 发现读者${v.readerName}仍未离馆。安保立即到场确认人身安全，读者服务联系家属，管理员按夜间滞留预案处置，完成后在人员交接项签字。`,
-    at: now.value, night: true, owner: 'security', readerId: v.readerId
-  })
-  incidentViewer.show(inc)
-  toast.bad('已创建夜间滞留事件并分派安保')
+  if (!v.strandedHandling) strandedStore.discover({ visitId, at: now.value })
+  strandedViewer.open(visitId)
 }
 
 // 签字
@@ -132,12 +148,9 @@ function toggleAfterClose(v: boolean) {
 }
 
 function finishHandover() {
-  if (!inspStore.canFinish(insp.value)) {
-    toast.bad('请完成全部巡检项、四方签字与闭馆后灯光空调复核')
-    return
-  }
-  if (activeVisits.value.length) {
-    toast.bad('仍有读者在馆，不能完成人员交接')
+  const reasons = inspStore.blockedReasons(insp.value)
+  if (reasons.length) {
+    toast.bad(`不能完成交接：${reasons.join('；')}`)
     return
   }
   const snapshot = inspStore.finish(insp.value, now.value, auth.account?.name ?? '', lib.value.id, finishNote.value)
@@ -148,7 +161,7 @@ function finishHandover() {
   system.setLibraryStatus(lib.value.id, 'closed')
   finishNote.value = ''
   afterClose.value = false
-  toast.ok(`✅ ${insp.value.date} 夜间交接档案已固化：人员、图书、设备、公共安全完成交接；${snapshot.carryIncidentIds.length} 件未结事件随档案移交次日督办`)
+  toast.ok(`✅ ${insp.value.date} 夜间交接档案已固化：人员、图书、设备、公共安全完成交接；${snapshot.strandedVisitIds.length} 条滞留处置已归档，${snapshot.carryIncidentIds.length} 件未结事件随档案移交次日督办`)
   archiveViewer.open(insp.value.id)
 }
 
@@ -284,24 +297,83 @@ function openItemIncident(item: CheckItem) {
       <div class="card-hd">
         <h3>🧍 人员清场（人员交接的前提）</h3>
         <span class="sub">逐一核查阅览区、卫生间、书架间、亲子区</span>
+        <div class="spacer"></div>
+        <button class="btn danger sm" @click="scanStranded">📡 闭馆后滞留扫描（比对门禁出闸记录）</button>
       </div>
       <div class="card-bd flush">
         <table class="tbl">
-          <thead><tr><th>读者</th><th>座位</th><th>入馆时间</th><th>类型</th><th class="right">处置</th></tr></thead>
+          <thead><tr><th>读者</th><th>座位/区域</th><th>入馆时间</th><th>类型</th><th class="right">处置</th></tr></thead>
           <tbody>
             <tr v-for="v in activeVisits" :key="v.id">
-              <td>{{ v.readerName }}<span v-if="v.isChild" class="tag st-info" style="margin-left:4px">儿童·须核对家长</span></td>
+              <td>{{ v.readerName }}<span v-if="v.isChild" class="tag st-info" style="margin-left:4px">儿童·须联系监护人</span></td>
               <td>{{ v.seatNo }}</td>
               <td class="nowrap">{{ fmtTime(v.enterAt) }}</td>
               <td><span v-if="v.stranded" class="tag st-bad">滞留</span><span v-else class="tag st-ok">在馆</span></td>
               <td class="right row" style="justify-content:flex-end">
                 <button class="mini-btn" @click="evacuate(v.id, v.readerName)">提醒并签离</button>
-                <button class="mini-btn" style="border-color:#e6aab3;color:var(--bad)" @click="createStrandedIncident(v.id)">夜间滞留→建事件</button>
+                <button class="mini-btn" style="border-color:#e6aab3;color:var(--bad)" @click="createStrandedIncident(v.id)">夜间滞留→处置单</button>
               </td>
             </tr>
-            <tr v-if="!activeVisits.length"><td colspan="5" class="empty">✅ 在馆人员已清零（历史滞留待复核：{{ strandedVisits.length }} 条）</td></tr>
+            <tr v-if="!activeVisits.length"><td colspan="5" class="empty">✅ 在馆人员已清零（历史滞留记录：{{ strandedVisits.length }} 条，见下方处置面板）</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- 夜间滞留处置 -->
+    <div class="card" :class="{ }" v-if="pendingStranded.length || handledStranded.length">
+      <div class="card-hd">
+        <h3>🌙 夜间滞留处置</h3>
+        <span class="sub">展示身份、区域、门禁记录与安保位置；劝离/延时/报警决策后才可完成交接；未成年人先联系监护人</span>
+      </div>
+      <div class="card-bd flush">
+        <table class="tbl">
+          <thead><tr><th>读者</th><th>发现区域/时间</th><th>安保</th><th>决策</th><th>监护人</th><th>最终离馆</th><th class="right">操作</th></tr></thead>
+          <tbody>
+            <tr v-for="v in strandedVisits" :key="v.id" :style="v.strandedHandling!.status !== 'left' ? 'background:#fff8f9' : ''">
+              <td>
+                <b>{{ v.readerName }}</b>
+                <span v-if="v.isChild" class="tag st-info" style="margin-left:4px">未成年</span>
+              </td>
+              <td class="small">{{ v.strandedHandling!.zone }}<div class="muted">{{ fmtDateTime(v.strandedHandling!.discoveredAt) }} {{ fmtTime(v.strandedHandling!.discoveredAt) }}</div></td>
+              <td class="small">
+                <template v-if="v.strandedHandling!.arrivedAt">
+                  <span class="tag st-ok">已到场</span> {{ v.strandedHandling!.securityName }}
+                </template>
+                <template v-else-if="v.strandedHandling!.dispatchedAt">
+                  <span class="tag st-warn">出动中</span> {{ v.strandedHandling!.securityPost }}
+                </template>
+                <template v-else><span class="tag st-bad">未派出</span></template>
+              </td>
+              <td class="small">
+                <span v-if="v.strandedHandling!.decision === 'persuade-leave'" class="tag st-ok">劝离</span>
+                <span v-else-if="v.strandedHandling!.decision === 'extended-stay'" class="tag st-warn">延时至 {{ v.strandedHandling!.extensionUntil ? fmtTime(v.strandedHandling!.extensionUntil) : '' }}</span>
+                <span v-else-if="v.strandedHandling!.decision === 'police'" class="tag st-bad">已报警</span>
+                <span v-else class="muted">未决策</span>
+              </td>
+              <td class="small">
+                <template v-if="v.isChild">
+                  <span v-if="v.strandedHandling!.guardianNotified" class="good-text">✔ 已通知</span>
+                  <span v-else class="bad-text"><span class="pulse-dot"></span>必须联系</span>
+                </template>
+                <span v-else class="muted">成年人</span>
+              </td>
+              <td class="small">
+                <span v-if="v.strandedHandling!.leftAt" class="good-text">{{ fmtTime(v.strandedHandling!.leftAt) }}</span>
+                <span v-else class="bad-text">未离馆</span>
+              </td>
+              <td class="right">
+                <button class="mini-btn" @click="openStranded(v)">
+                  {{ v.strandedHandling!.status === 'left' ? '查看处置记录' : '处置 →' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="pendingStranded.length" class="card-bd" style="background:#fdf1f3;border-top:1px solid #f0c6cd">
+          <b class="bad-text">⛔ 尚有 {{ pendingStranded.length }} 名滞留读者未记录最终离馆时间，闭馆巡检不允许完成。</b>
+          <span class="small muted">处置顺序：派安保→到场→读者解释→（未成年人联系监护人）→管理员劝离/延时/报警→确认离馆。</span>
+        </div>
       </div>
     </div>
 
@@ -398,6 +470,24 @@ function openItemIncident(item: CheckItem) {
           <b>{{ insp.date }} 夜间交接档案</b>移交（仅挂接一次），次日开馆继续提示管理员督办并可回链本档案：
           <span v-for="i in openIncidents.slice(0,5)" :key="i.id" class="tag" style="margin:2px"
             :class="severityMeta[i.severity].cls">{{ incidentTypeMeta[i.type].icon }} {{ i.title }}</span>
+        </div>
+
+        <!-- 完成交接前置条件 -->
+        <div class="mt12 card" style="box-shadow:none" :style="inspStore.blockedReasons(insp).length ? 'background:#fdf4f6;border-color:#eabcc5' : 'background:#f3faf7;border-color:#bfe2d8'">
+          <div class="card-bd small">
+            <b>完成交接前置条件：</b>
+            <ul style="padding-left:18px;margin-top:4px;line-height:1.9">
+              <li :class="insp.startedAt ? 'good-text' : 'bad-text'">{{ insp.startedAt ? '✔' : '✗' }} 已开始巡检</li>
+              <li :class="prog.done === prog.total ? 'good-text' : 'bad-text'">{{ prog.done === prog.total ? '✔' : '✗' }} 12 项巡检全部完成（{{ prog.done }}/{{ prog.total }}）</li>
+              <li :class="['people','books','devices','safety'].every(d => insp.signatures[d as 'people']) ? 'good-text' : 'bad-text'">
+                {{ ['people','books','devices','safety'].every(d => insp.signatures[d as 'people']) ? '✔' : '✗' }} 人员/图书/设备/公共安全四方签字齐全
+              </li>
+              <li :class="insp.afterCloseCheck ? 'good-text' : 'bad-text'">{{ insp.afterCloseCheck ? '✔' : '✗' }} 闭馆后灯光空调复核</li>
+              <li :class="pendingStranded.length ? 'bad-text' : 'good-text'">
+                {{ pendingStranded.length ? '✗' : '✔' }} 夜间滞留处置全部闭环（{{ pendingStranded.length }} 人未离馆；未成年人须已通知监护人）
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

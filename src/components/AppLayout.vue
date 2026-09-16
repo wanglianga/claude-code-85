@@ -10,7 +10,9 @@ import { fmtCountdown, fmtTime } from '@/utils/format'
 import { resetDemoData } from '@/stores/persist'
 import IncidentDrawer from '@/components/IncidentDrawer.vue'
 import HandoverArchiveDrawer from '@/components/HandoverArchiveDrawer.vue'
+import StrandedDrawer from '@/components/StrandedDrawer.vue'
 import { useIncidentViewer } from '@/composables/useIncidentViewer'
+import { useStrandedViewer } from '@/composables/useStrandedViewer'
 
 const route = useRoute()
 const router = useRouter()
@@ -157,5 +159,7 @@ function resetDemo() {
     <IncidentDrawer :incident="globalIncident" @close="incidentViewer.close()" />
     <!-- 只读夜间交接档案抽屉 -->
     <HandoverArchiveDrawer />
+    <!-- 夜间滞留处置抽屉 -->
+    <StrandedDrawer />
   </div>
 </template>

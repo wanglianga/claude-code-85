@@ -2,16 +2,20 @@
 import { computed } from 'vue'
 import { useArchiveViewer } from '@/composables/useArchiveViewer'
 import { useIncidentViewer } from '@/composables/useIncidentViewer'
+import { useStrandedViewer } from '@/composables/useStrandedViewer'
 import { useSystemStore } from '@/stores/system'
 import { useIncidentStore } from '@/stores/incident'
+import { useBranchStore } from '@/stores/branch'
 import { incidentTypeMeta, severityMeta } from '@/data/meta'
 import { fmtDateTime, fmtTime } from '@/utils/format'
-import type { CheckState } from '@/types'
+import type { CheckState, Visit } from '@/types'
 
 const archiveViewer = useArchiveViewer()
 const incidentViewer = useIncidentViewer()
+const strandedViewer = useStrandedViewer()
 const system = useSystemStore()
 const incStore = useIncidentStore()
+const branch = useBranchStore()
 
 const archive = computed(() => archiveViewer.archive.value)
 
@@ -36,6 +40,19 @@ const stillOpen = computed(() => carryIncidents.value.filter((i) => i.status !==
 function openIncident(id: string) {
   archiveViewer.close()
   incidentViewer.open(id)
+}
+
+/** 本夜滞留处置记录（快照中存 visit id，详情永久保存在 visits） */
+const strandedVisits = computed<Visit[]>(() => {
+  if (!archive.value?.archive?.strandedVisitIds) return []
+  return archive.value.archive.strandedVisitIds
+    .map((id) => branch.visits.find((v) => v.id === id))
+    .filter((v): v is Visit => !!v && !!v.strandedHandling)
+    .sort((a, b) => a.strandedHandling!.discoveredAt - b.strandedHandling!.discoveredAt)
+})
+function openStranded(v: Visit) {
+  archiveViewer.close()
+  strandedViewer.open(v.id)
 }
 
 const sigRows = computed(() => [
@@ -139,6 +156,47 @@ function sigName(key: 'people' | 'books' | 'devices' | 'safety'): string {
                 <span class="tag" :class="stateLabel[item.state].cls">{{ stateLabel[item.state].text }}</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- 本夜滞留处置记录 -->
+        <div class="card" v-if="strandedVisits.length">
+          <div class="card-hd">
+            <h3>🧍 本夜滞留处置记录（{{ strandedVisits.length }}）</h3>
+            <span class="sub">含身份、区域、门禁、安保到场、解释、决策、监护人沟通与最终离馆时间</span>
+          </div>
+          <div class="card-bd flush">
+            <table class="tbl">
+              <thead><tr><th>读者</th><th>发现区域/时间</th><th>安保到场</th><th>决策</th><th>监护人</th><th>最终离馆</th><th class="right">详情</th></tr></thead>
+              <tbody>
+                <tr v-for="v in strandedVisits" :key="v.id" class="clickable">
+                  <td>{{ v.readerName }}<span v-if="v.isChild" class="tag st-info" style="margin-left:4px">未成年</span></td>
+                  <td class="small">{{ v.strandedHandling!.zone }}<div class="muted">{{ fmtTime(v.strandedHandling!.discoveredAt) }}</div></td>
+                  <td class="small">
+                    <span v-if="v.strandedHandling!.arrivedAt" class="good-text">{{ fmtTime(v.strandedHandling!.arrivedAt) }} {{ v.strandedHandling!.securityName }}</span>
+                    <span v-else class="bad-text">未到场</span>
+                  </td>
+                  <td class="small">
+                    <span v-if="v.strandedHandling!.decision === 'persuade-leave'" class="tag st-ok">劝离</span>
+                    <span v-else-if="v.strandedHandling!.decision === 'extended-stay'" class="tag st-warn">延时</span>
+                    <span v-else-if="v.strandedHandling!.decision === 'police'" class="tag st-bad">报警</span>
+                    <span v-else class="muted">—</span>
+                  </td>
+                  <td class="small">
+                    <template v-if="v.isChild">
+                      <span v-if="v.strandedHandling!.guardianNotified" class="good-text">已通知 ✔</span>
+                      <span v-else class="bad-text">未联系</span>
+                    </template>
+                    <span v-else class="muted">成年人</span>
+                  </td>
+                  <td class="small">
+                    <span v-if="v.strandedHandling!.leftAt" class="good-text">{{ fmtDateTime(v.strandedHandling!.leftAt) }} {{ fmtTime(v.strandedHandling!.leftAt) }}</span>
+                    <span v-else class="bad-text">未离馆</span>
+                  </td>
+                  <td class="right"><button class="mini-btn" @click="openStranded(v)">处置记录</button></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 

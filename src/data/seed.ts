@@ -34,7 +34,8 @@ export const seedLibraries: Library[] = [
     seatsTotal: 60,
     status: 'open',
     streetDutyPhone: '0571-88001100（湖滨街道值班）',
-    securityDispatchPhone: '0571-88002200（安保调度中心）'
+    securityDispatchPhone: '0571-88002200（安保调度中心）',
+    securityPosts: ['正门安保岗', '一层值班台', '夜间巡逻岗（馆内）', '安保调度中心（3 公里外）']
   },
   {
     id: 'lib-yunhe',
@@ -45,7 +46,8 @@ export const seedLibraries: Library[] = [
     seatsTotal: 40,
     status: 'open',
     streetDutyPhone: '0571-88003300（小河街道值班）',
-    securityDispatchPhone: '0571-88002200（安保调度中心）'
+    securityDispatchPhone: '0571-88002200（安保调度中心）',
+    securityPosts: ['正门安保岗', '服务台值班岗', '夜间巡逻岗（馆内）', '安保调度中心（4 公里外）']
   },
   {
     id: 'lib-jiangnan',
@@ -56,7 +58,8 @@ export const seedLibraries: Library[] = [
     seatsTotal: 80,
     status: 'closed',
     streetDutyPhone: '0571-88004400（江南街道值班）',
-    securityDispatchPhone: '0571-88002200（安保调度中心）'
+    securityDispatchPhone: '0571-88002200（安保调度中心）',
+    securityPosts: ['正门安保岗', '一层值班台', '安保调度中心（2.5 公里外）']
   }
 ]
 
@@ -196,12 +199,51 @@ export const seedVisits: Visit[] = [
     id: uid('v'), libraryId: 'lib-yunhe', readerId: 'r-007', readerName: '郑凯', isChild: false,
     entryMethod: 'card', entryNo: 'LS20210311', seatNo: 'C-08', enterAt: now - 55 * min
   },
-  // 夜间滞留（江南里书房昨晚闭馆后发现，遗留未结）
-  {
-    id: uid('v'), libraryId: 'lib-jiangnan', readerId: 'r-005', readerName: '吴浩', isChild: false,
-    entryMethod: 'idcard', entryNo: '330106********0055', seatNo: 'B-17', enterAt: now - 20 * 60 * min,
-    leaveAt: undefined, stranded: true, resolved: false, note: '昨晚 22:05 清场发现伏案熟睡，已叫醒带离，待复核'
-  }
+  // 夜间滞留（江南里书房昨晚闭馆后发现，已完成处置但服务跟进事件遗留）
+  (() => {
+    const found = now - 11 * 60 * min
+    const dispatched = now - 10.8 * 60 * min
+    const arrived = now - 10.5 * 60 * min
+    const decided = now - 10.2 * 60 * min
+    const left = now - 10 * 60 * min
+    const v: Visit = {
+      id: uid('v'), libraryId: 'lib-jiangnan', readerId: 'r-005', readerName: '吴浩', isChild: false,
+      entryMethod: 'idcard', entryNo: '330106********0055', seatNo: 'B-17',
+      enterAt: now - 20 * 60 * min, leaveAt: left, stranded: true, resolved: true,
+      note: '昨晚 22:05 清场发现伏案熟睡；本人解释加班后疲惫睡着，已劝离。读者服务今日谈话跟进',
+      strandedHandling: {
+        status: 'left',
+        discoveredAt: found,
+        zone: '一层阅览区 B 区（B-17 座位）',
+        gateRecords: [
+          { at: now - 20 * 60 * min, gate: '正门闸机', event: '刷身份证入馆，分配座位 B-17' },
+          { at: now - 11.2 * 60 * min, gate: '正门闸机', event: '闭馆后门禁布防，无该读者出闸记录' }
+        ],
+        securityName: '夜班安保 马强',
+        securityPost: '夜间巡逻岗（馆内）',
+        securityEtaMin: 3,
+        securityPhone: '139****8856',
+        dispatchedAt: dispatched,
+        arrivedAt: arrived,
+        readerReason: '在互联网公司加班多日，太累看着书睡着了，没有听到闭馆广播。',
+        decision: 'persuade-leave',
+        decidedAt: decided,
+        decidedBy: '王管（管理员）',
+        decisionNote: '身体状况正常、无饮酒，予以劝离；登记滞留 1 次，次日读者服务谈话并信用扣分。',
+        leftAt: left,
+        leaveMethod: 'staff-escort',
+        incidentId: undefined,
+        logs: [
+          { at: found, actor: '系统', role: 'system', text: '闭馆清场扫描：B-17 座位发现读者未离馆，生成夜间滞留处置' },
+          { at: dispatched, actor: '王管', role: 'admin', text: '通知夜间巡逻岗安保马强到场（预计 3 分钟）' },
+          { at: arrived, actor: '马强', role: 'security', text: '到场确认：读者生命体征正常、意识清醒' },
+          { at: decided, actor: '王管', role: 'admin', text: '管理员确认处置方式：劝离（非未成年人，无需联系监护人）' },
+          { at: left, actor: '马强', role: 'security', text: '22:16 陪同读者从正门离馆，门禁恢复布防，最终离馆时间已记录' }
+        ]
+      }
+    }
+    return v
+  })()
 ]
 
 export const seedUsageLogs: UsageLog[] = [

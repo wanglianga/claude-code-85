@@ -13,6 +13,7 @@ import { buildTodayInspection, seedInspections } from '@/data/seed'
 import { useIncidentStore } from '@/stores/incident'
 import { useBranchStore } from '@/stores/branch'
 import { useSystemStore } from '@/stores/system'
+import { useStrandedStore } from '@/stores/stranded'
 import { fmtDate } from '@/utils/format'
 
 function clone<T>(v: T): T {
@@ -159,11 +160,36 @@ export const useInspectionStore = defineStore('inspection', () => {
     return { done, total: insp.items.length, abnormal }
   }
 
+  /**
+   * 闭馆完成前置条件：12 项检完、四方签字、灯光空调复核；
+   * 且夜间滞留读者必须全部完成处置（有决策 + 最终离馆时间，未成年人已通知监护人）。
+   */
+  function blockedReasons(insp: Inspection): string[] {
+    const reasons: string[] = []
+    if (!insp.startedAt) reasons.push('巡检尚未开始')
+    const pending = insp.items.filter((i) => i.state === 'pending')
+    if (pending.length) reasons.push(`仍有 ${pending.length} 项未检查`)
+    const domains: (keyof Inspection['signatures'])[] = ['people', 'books', 'devices', 'safety']
+    const unsigned = domains.filter((d) => !insp.signatures[d])
+    if (unsigned.length) reasons.push(`交接签字未完成（${unsigned.length} 方）`)
+    if (insp.afterCloseCheck !== true) reasons.push('未完成闭馆后灯光空调复核')
+    const branch = useBranchStore()
+    const stillHere = branch.activeVisits(insp.libraryId)
+    if (stillHere.length) {
+      reasons.push(`仍有 ${stillHere.length} 名读者在馆，请先执行闭馆后滞留扫描并完成处置或签离`)
+    }
+    const stranded = useStrandedStore().unresolved(insp.libraryId)
+    if (stranded.length) {
+      reasons.push(
+        `仍有 ${stranded.length} 名夜间滞留读者未完成处置（须安保到场、管理员劝离/延时/报警决策、记录最终离馆时间；未成年人须先通知监护人）`
+      )
+    }
+    return reasons
+  }
+
   function canFinish(insp: Inspection): boolean {
     if (insp.frozen) return false
-    const allChecked = insp.items.every((i) => i.state !== 'pending')
-    const signed = !!(insp.signatures.people && insp.signatures.books && insp.signatures.devices && insp.signatures.safety)
-    return !!insp.startedAt && allChecked && signed && insp.afterCloseCheck === true
+    return blockedReasons(insp).length === 0
   }
 
   /**
@@ -174,7 +200,12 @@ export const useInspectionStore = defineStore('inspection', () => {
   function finish(insp: Inspection, at: number, actor: string, libraryId: string, conclusion = ''): HandoverSnapshot | null {
     if (!canFinish(insp)) return null
     const incidentStore = useIncidentStore()
+    const strandedStore = useStrandedStore()
     const carryIds = incidentStore.attachToArchive(libraryId, insp.id, insp.date, at)
+    const strandedVisitIds = strandedStore
+      .strandedVisits(libraryId)
+      .filter((v) => v.strandedHandling!.discoveredAt <= at)
+      .map((v) => v.id)
     const snapshot: HandoverSnapshot = {
       finishedAt: at,
       items: clone(insp.items),
@@ -182,7 +213,8 @@ export const useInspectionStore = defineStore('inspection', () => {
       afterCloseCheck: !!insp.afterCloseCheck,
       closedBy: actor,
       conclusion: conclusion || '人员、图书、设备、公共安全四方交接完成，书房转入夜间无人值守模式。',
-      carryIncidentIds: carryIds
+      carryIncidentIds: carryIds,
+      strandedVisitIds
     }
     insp.finishedAt = at
     insp.archive = snapshot
@@ -295,6 +327,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     handoverDone,
     progress,
     canFinish,
+    blockedReasons,
     finish,
     openNextDay,
     resetCurrent,

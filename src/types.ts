@@ -31,9 +31,73 @@ export interface Library {
   /** 街道值班电话、安保调度电话 */
   streetDutyPhone: string
   securityDispatchPhone: string
+  /** 可派驻安保的值班位置 */
+  securityPosts: string[]
 }
 
 export type EntryMethod = 'idcard' | 'card' | 'reservation'
+
+/** 夜间滞留处置决策：劝离 / 特殊延时 / 报警 */
+export type StrandedDecision = 'persuade-leave' | 'extended-stay' | 'police'
+export type StrandedStatus =
+  | 'discovered' // 已发现滞留
+  | 'dispatched' // 已派安保
+  | 'onscene' // 安保到场
+  | 'decided' // 管理员已作出处置决策
+  | 'left' // 读者最终离馆
+
+export interface StrandedLog {
+  at: number
+  actor: string
+  role: Role | 'system'
+  text: string
+}
+
+export interface GateRecord {
+  at: number
+  gate: string
+  event: string
+}
+
+/** 夜间滞留处置全流程留痕（随在馆记录永久保存，次日可查、随档案移交） */
+export interface StrandedHandling {
+  status: StrandedStatus
+  discoveredAt: number
+  /** 发现时所在区域 */
+  zone: string
+  /** 门禁/闸机记录快照 */
+  gateRecords: GateRecord[]
+  /** 处置安保与其位置 */
+  securityName: string
+  securityPost: string
+  securityEtaMin?: number
+  securityPhone?: string
+  dispatchedAt?: number
+  arrivedAt?: number
+  /** 读者解释 */
+  readerReason?: string
+  /** 管理员决策 */
+  decision?: StrandedDecision
+  decidedAt?: number
+  decidedBy?: string
+  decisionNote?: string
+  /** 特殊延时截止时间 */
+  extensionUntil?: number
+  /** 报警信息 */
+  policeAt?: number
+  policeNo?: string
+  /** 未成年人监护人沟通 */
+  guardianNotified?: boolean
+  guardianNotifiedAt?: number
+  guardianContactResult?: string
+  guardianWillPickup?: boolean
+  /** 最终离馆 */
+  leftAt?: number
+  leaveMethod?: 'self' | 'guardian-pickup' | 'police' | 'staff-escort'
+  /** 关联滞留事件 */
+  incidentId?: string
+  logs: StrandedLog[]
+}
 
 /** 读者档案 */
 export interface Reader {
@@ -68,6 +132,8 @@ export interface Visit {
   stranded?: boolean
   resolved?: boolean
   note?: string
+  /** 夜间滞留处置记录（发现后创建；含身份、区域、门禁、安保到场、解释、决策、监护人沟通、最终离馆时间） */
+  strandedHandling?: StrandedHandling
 }
 
 export type BookStatus =
@@ -252,6 +318,8 @@ export interface HandoverSnapshot {
   conclusion: string
   /** 随档案移交、需要次日继续督办的未闭环事件 */
   carryIncidentIds: string[]
+  /** 本夜间完成的滞留处置记录（在馆记录 id，处置详情在 visits 中永久保存） */
+  strandedVisitIds: string[]
 }
 
 export interface Inspection {
