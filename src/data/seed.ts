@@ -14,7 +14,12 @@ import type {
   Visit,
   VolunteerPatrol
 } from '@/types'
-import { uid } from '@/utils/format'
+import { pad, uid } from '@/utils/format'
+
+function localDate(ts: number): string {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
 
 const now = Date.now()
 const min = 60_000
@@ -340,7 +345,7 @@ export function buildTodayInspection(libraryId: string): Inspection {
   return {
     id: uid('insp'),
     libraryId,
-    date: new Date(now).toISOString().slice(0, 10),
+    date: localDate(now),
     signatures: {},
     items
   }

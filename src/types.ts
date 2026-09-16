@@ -197,6 +197,9 @@ export interface Incident {
   bookId?: string
   /** 未处理遗留到次日开馆 */
   carryOver?: boolean
+  /** 闭馆交接时挂接的夜间交接档案 id（仅挂接一次，供次日待办回链追溯） */
+  handoverArchiveId?: string
+  handoverArchiveDate?: string
   /** 停电事件下的应急处置标记 */
   blackout?: boolean
   actions: IncidentAction[]
@@ -233,10 +236,28 @@ export interface CheckItem {
   incidentId?: string
 }
 
+/** 闭馆交接档案快照（完成交接时固化，此后任何操作不可改写） */
+export interface HandoverSnapshot {
+  /** 完成时间（固化） */
+  finishedAt: number
+  /** 固化时逐项结果快照 */
+  items: CheckItem[]
+  /** 四方签字快照 */
+  signatures: NonNullable<Inspection['signatures']>
+  /** 闭馆后灯光空调复核 */
+  afterCloseCheck: boolean
+  /** 完成交接的操作者 */
+  closedBy: string
+  /** 闭馆结论备注 */
+  conclusion: string
+  /** 随档案移交、需要次日继续督办的未闭环事件 */
+  carryIncidentIds: string[]
+}
+
 export interface Inspection {
   id: string
   libraryId: string
-  /** 巡检归属日期 YYYY-MM-DD */
+  /** 巡检归属日期 YYYY-MM-DD（营业日） */
   date: string
   startedAt?: number
   finishedAt?: number
@@ -250,6 +271,10 @@ export interface Inspection {
   items: CheckItem[]
   /** 闭馆后灯光空调复核 */
   afterCloseCheck?: boolean
+  /** 已固化为夜间交接档案：此后为只读历史，任何开馆/重置操作都不得改写 */
+  frozen?: boolean
+  /** 交接档案快照（与完成时内容一致，独立留存供追溯） */
+  archive?: HandoverSnapshot
 }
 
 // ---------------- 志愿者巡馆 / 调拨 / 信用 / 活动 ----------------

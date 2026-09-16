@@ -5,10 +5,12 @@ import { useIncidentStore } from '@/stores/incident'
 import { useAuthStore, roleNames } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 import { useBranchStore } from '@/stores/branch'
+import { useInspectionStore } from '@/stores/inspection'
 import { incidentTypeMeta, severityMeta } from '@/data/meta'
 import { actionLabels, canDo, ownerName } from '@/data/sop'
 import { fmtDateTime, fmtTime } from '@/utils/format'
 import { useToast } from '@/composables/useToast'
+import { useArchiveViewer } from '@/composables/useArchiveViewer'
 
 const props = defineProps<{ incident: Incident | null }>()
 const emit = defineEmits<{ close: [] }>()
@@ -18,6 +20,8 @@ const auth = useAuthStore()
 const system = useSystemStore()
 const branch = useBranchStore()
 const toast = useToast()
+const archiveViewer = useArchiveViewer()
+const inspStore = useInspectionStore()
 
 const comment = ref('')
 const newOwner = ref<'admin' | 'security' | 'maintainer' | 'service'>('security')
@@ -78,6 +82,15 @@ const statusLabel: Record<Incident['status'], string> = {
   resolved: '已处置待复核',
   closed: '已归档'
 }
+
+const linkedArchive = computed(() =>
+  props.incident?.handoverArchiveId
+    ? inspStore.archiveById(props.incident.handoverArchiveId) ?? null
+    : null
+)
+function openArchive() {
+  if (props.incident?.handoverArchiveId) archiveViewer.open(props.incident.handoverArchiveId)
+}
 </script>
 
 <template>
@@ -108,6 +121,19 @@ const statusLabel: Record<Incident['status'], string> = {
       </div>
 
       <div class="drawer-bd">
+        <!-- 来源交接档案回链 -->
+        <div v-if="linkedArchive" class="card" style="border-color:#cfe2c8;background:#f6fbf4">
+          <div class="card-bd small row">
+            <span style="font-size:18px">📜</span>
+            <div>
+              <div><b>来源：{{ linkedArchive.date }} 夜间交接档案</b></div>
+              <div class="muted">该事件随闭馆交接移交，档案含 12 项巡检结果、四方签字与完成时间，可追溯。</div>
+            </div>
+            <div class="spacer"></div>
+            <button class="btn ghost sm" @click="openArchive">📜 查看交接档案</button>
+          </div>
+        </div>
+
         <!-- 事件描述与关联对象 -->
         <div class="card">
           <div class="card-hd"><h3>事件描述</h3></div>
@@ -170,7 +196,7 @@ const statusLabel: Record<Incident['status'], string> = {
               <div v-for="a in incident.actions" :key="a.id" class="tl-item" :class="{ sys: a.role === 'system' }">
                 <div>
                   <span class="tl-who">{{ a.actor }}</span>
-                  <span class="tag" style="margin-left:6px">{{ a.role === 'system' ? '系统' : a.role === 'street' ? '街道值班' : roleNames[a.role] }}</span>
+                  <span class="tag" style="margin-left:6px">{{ incStore.roleLabel(a.role) }}</span>
                   <span class="tag st-info" style="margin-left:4px">{{ actionLabels[a.type] }}</span>
                   <span class="tl-time">{{ fmtDateTime(a.at) }} {{ fmtTime(a.at) }}</span>
                 </div>

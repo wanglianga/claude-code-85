@@ -2,7 +2,14 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Library } from '@/types'
 import { seedLibraries } from '@/data/seed'
-import { hhmmToTs } from '@/utils/format'
+
+/** 以 base 所在的本地日期，组合 HH:mm 为时间戳（保证模拟跨日时倒计时仍正确） */
+function hhmmOn(base: number, hhmm: string): number {
+  const d = new Date(base)
+  const [h, m] = hhmm.split(':').map(Number)
+  d.setHours(h, m, 0, 0)
+  return d.getTime()
+}
 
 export const useSystemStore = defineStore('system', () => {
   const libraries = ref<Library[]>(JSON.parse(JSON.stringify(seedLibraries)))
@@ -30,9 +37,9 @@ export const useSystemStore = defineStore('system', () => {
     () => libraries.value.find((l) => l.id === currentLibraryId.value) ?? libraries.value[0]
   )
 
-  /** 当前书房闭馆时间戳（今天） */
-  const closeTs = computed(() => hhmmToTs(currentLibrary.value.closeTime))
-  const openTs = computed(() => hhmmToTs(currentLibrary.value.openTime))
+  /** 当前书房闭馆时间戳（按当前时钟所在日期计算，跨日自动跟随） */
+  const closeTs = computed(() => hhmmOn(now.value, currentLibrary.value.closeTime))
+  const openTs = computed(() => hhmmOn(now.value, currentLibrary.value.openTime))
 
   const msToClose = computed(() => closeTs.value - now.value)
   const isAfterClose = computed(() => now.value >= closeTs.value)
@@ -50,15 +57,22 @@ export const useSystemStore = defineStore('system', () => {
 
   /** 演示：把时钟跳到某书房闭馆前 N 分钟，并按倍率自走 */
   function jumpBeforeClose(minutes: number, fastScale = 60) {
-    now.value = hhmmToTs(currentLibrary.value.closeTime) - minutes * 60_000
+    now.value = hhmmOn(now.value, currentLibrary.value.closeTime) - minutes * 60_000
     simulated.value = true
     scale.value = fastScale
   }
   function jumpToAfterClose(minutes: number, fastScale = 60) {
-    now.value = hhmmToTs(currentLibrary.value.closeTime) + minutes * 60_000
+    now.value = hhmmOn(now.value, currentLibrary.value.closeTime) + minutes * 60_000
     simulated.value = true
     scale.value = fastScale
   }
+  /** 演示：把时钟跳到指定时间戳并进入模拟模式（按正常秒速自走） */
+  function jumpToTimestamp(ts: number) {
+    now.value = ts
+    simulated.value = true
+    scale.value = 1
+  }
+
   function resumeRealTime() {
     simulated.value = false
     scale.value = 1
@@ -94,6 +108,7 @@ export const useSystemStore = defineStore('system', () => {
     setLibraryStatus,
     jumpBeforeClose,
     jumpToAfterClose,
+    jumpToTimestamp,
     resumeRealTime,
     triggerBlackout,
     restorePower

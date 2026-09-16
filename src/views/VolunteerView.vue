@@ -7,7 +7,7 @@ import { useBranchStore } from '@/stores/branch'
 import { useIncidentStore } from '@/stores/incident'
 import { fmtDateTime, fmtTime } from '@/utils/format'
 import { useToast } from '@/composables/useToast'
-import IncidentDrawer from '@/components/IncidentDrawer.vue'
+import { useIncidentViewer } from '@/composables/useIncidentViewer'
 import type { Incident } from '@/types'
 
 const auth = useAuthStore()
@@ -16,6 +16,7 @@ const branch = useBranchStore()
 const incStore = useIncidentStore()
 const toast = useToast()
 const { now } = storeToRefs(system)
+const incidentViewer = useIncidentViewer()
 
 // 志愿者限定在自己的书房；其他角色可查看当前书房
 const myLibraryId = computed(
@@ -55,7 +56,7 @@ function submitPatrol() {
       owner: incidentSeverity.value === 'high' ? 'security' : 'service'
     })
     incidentId = inc.id
-    selected.value = inc
+    incidentViewer.show(inc)
   }
   branch.addPatrol({
     libraryId: myLibraryId.value,
@@ -71,11 +72,10 @@ function submitPatrol() {
   incidentTitle.value = ''
 }
 
-const selected = ref<Incident | null>(null)
 const linkedIncident = (id?: string) => (id ? incStore.incidents.find((i) => i.id === id) : null)
 function openLinked(id?: string) {
   const inc = linkedIncident(id)
-  if (inc) selected.value = inc
+  if (inc) incidentViewer.show(inc)
 }
 
 // 志愿者视角的今日摘要
@@ -164,6 +164,5 @@ const openIncidents = computed(() =>
       </div>
     </div>
 
-    <IncidentDrawer :incident="selected" @close="selected = null" />
   </div>
 </template>

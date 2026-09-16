@@ -8,6 +8,9 @@ import { useIncidentStore } from '@/stores/incident'
 import { useBranchStore } from '@/stores/branch'
 import { fmtCountdown, fmtTime } from '@/utils/format'
 import { resetDemoData } from '@/stores/persist'
+import IncidentDrawer from '@/components/IncidentDrawer.vue'
+import HandoverArchiveDrawer from '@/components/HandoverArchiveDrawer.vue'
+import { useIncidentViewer } from '@/composables/useIncidentViewer'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +19,8 @@ const system = useSystemStore()
 const incidents = useIncidentStore()
 const branch = useBranchStore()
 const { now } = storeToRefs(system)
+const incidentViewer = useIncidentViewer()
+const globalIncident = incidentViewer.incident
 
 const nav = computed(() => {
   const role = auth.account?.role
@@ -147,5 +152,10 @@ function resetDemo() {
         <slot />
       </main>
     </div>
+
+    <!-- 全局事件抽屉（页面通过 useIncidentViewer 打开） -->
+    <IncidentDrawer :incident="globalIncident" @close="incidentViewer.close()" />
+    <!-- 只读夜间交接档案抽屉 -->
+    <HandoverArchiveDrawer />
   </div>
 </template>

@@ -38,6 +38,16 @@ export const useIncidentStore = defineStore('incident', () => {
     )
   )
 
+  /** 某档案随交接移交的遗留事件 */
+  function incidentsOfArchive(archiveId: string): Incident[] {
+    return incidents.value.filter((i) => i.handoverArchiveId === archiveId)
+  }
+
+  /** 某档案随交接移交且次日仍未闭环的遗留事件（供新营业日待办回链） */
+  function openCarryOfArchive(archiveId: string): Incident[] {
+    return incidents.value.filter((i) => i.handoverArchiveId === archiveId && i.status !== 'closed')
+  }
+
   function openCount(libraryId: string): number {
     return ofLibrary(libraryId).filter((i) => i.status !== 'closed').length
   }
@@ -159,21 +169,30 @@ export const useIncidentStore = defineStore('incident', () => {
     })
   }
 
-  /** 闭馆后未关闭事件自动标记遗留，次日开馆继续提示 */
-  function markCarryOver(libraryId: string, at: number) {
+  /**
+   * 闭馆交接固化时调用：把本馆当前未闭环事件挂接到指定夜间交接档案（仅挂接一次）。
+   * - 已挂接到其它档案或已挂接本档案的事件不重复挂接、不重复发通知；
+   * - 事件本身不被关闭/重置，次日开馆后继续作为遗留待办，可回链原档案。
+   */
+  function attachToArchive(libraryId: string, archiveId: string, archiveDate: string, at: number): string[] {
+    const ids: string[] = []
     for (const inc of ofLibrary(libraryId)) {
-      if (inc.status !== 'closed') {
-        inc.carryOver = true
-        inc.actions.push({
-          id: uid('a'),
-          at,
-          role: 'system',
-          actor: '系统',
-          type: 'notify',
-          text: '闭馆交接：事件未闭环，标记为遗留事项，次日开馆继续督办'
-        })
-      }
+      if (inc.status === 'closed') continue
+      if (inc.handoverArchiveId) continue // 已随更早的档案移交，不重复通知
+      inc.handoverArchiveId = archiveId
+      inc.handoverArchiveDate = archiveDate
+      inc.carryOver = true
+      ids.push(inc.id)
+      inc.actions.push({
+        id: uid('a'),
+        at,
+        role: 'system',
+        actor: '系统',
+        type: 'notify',
+        text: `夜间交接（${archiveDate}）已固化：事件随档案移交，次日开馆继续督办，可从事件详情回查该交接档案。`
+      })
     }
+    return ids
   }
 
   /** 次日开馆确认（管理员）：取消遗留提示但未关闭的仍显示 */
@@ -211,7 +230,9 @@ export const useIncidentStore = defineStore('incident', () => {
     create,
     act,
     escalate,
-    markCarryOver,
+    attachToArchive,
+    incidentsOfArchive,
+    openCarryOfArchive,
     acknowledgeCarryOver,
     sopOf,
     roleLabel

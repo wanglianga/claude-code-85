@@ -8,7 +8,7 @@ import { incidentTypeMeta, severityMeta } from '@/data/meta'
 import { ownerName } from '@/data/sop'
 import { fmtTime } from '@/utils/format'
 import type { Incident, IncidentSeverity, IncidentType } from '@/types'
-import IncidentDrawer from '@/components/IncidentDrawer.vue'
+import { useIncidentViewer } from '@/composables/useIncidentViewer'
 import { useToast } from '@/composables/useToast'
 
 const incStore = useIncidentStore()
@@ -16,8 +16,8 @@ const system = useSystemStore()
 const auth = useAuthStore()
 const toast = useToast()
 const { now } = storeToRefs(system)
+const incidentViewer = useIncidentViewer()
 
-const selected = ref<Incident | null>(null)
 const filterNight = ref<'all' | 'day' | 'night' | 'carry'>('all')
 const filterStatus = ref<'open' | 'all' | 'closed'>('open')
 const filterType = ref<IncidentType | ''>('')
@@ -42,7 +42,7 @@ const list = computed(() => {
 })
 
 function openIt(i: Incident) {
-  selected.value = i
+  incidentViewer.show(i)
 }
 
 // 手动新建事件
@@ -88,7 +88,7 @@ function createIncident() {
   toast.ok('事件已创建并通知责任方')
   showCreate.value = false
   cTitle.value = cDetail.value = ''
-  selected.value = inc
+  incidentViewer.show(inc)
 }
 
 const counts = computed(() => ({
@@ -239,7 +239,5 @@ const statusCls: Record<Incident['status'], string> = {
         </div>
       </div>
     </template>
-
-    <IncidentDrawer :incident="selected" @close="selected = null" />
   </div>
 </template>

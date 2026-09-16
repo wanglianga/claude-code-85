@@ -9,9 +9,10 @@ import { useInspectionStore } from '@/stores/inspection'
 import { useAuthStore } from '@/stores/auth'
 import { incidentTypeMeta, severityMeta, deviceTypeMeta } from '@/data/meta'
 import { ownerName } from '@/data/sop'
-import { fmtCountdown, fmtDuration, fmtTime, todayStr } from '@/utils/format'
+import { fmtCountdown, fmtDuration, fmtTime } from '@/utils/format'
 import type { Incident } from '@/types'
-import IncidentDrawer from '@/components/IncidentDrawer.vue'
+import { useIncidentViewer } from '@/composables/useIncidentViewer'
+import { useArchiveViewer } from '@/composables/useArchiveViewer'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -22,8 +23,15 @@ const inspStore = useInspectionStore()
 const auth = useAuthStore()
 const toast = useToast()
 const { now } = storeToRefs(system)
+const incidentViewer = useIncidentViewer()
+const archiveViewer = useArchiveViewer()
 
-const selected = ref<Incident | null>(null)
+function openIncident(id: string) {
+  incidentViewer.open(id)
+}
+function openArchive(id: string) {
+  archiveViewer.open(id)
+}
 
 const lib = computed(() => system.currentLibrary)
 const visits = computed(() => branch.activeVisits(lib.value.id))
@@ -52,8 +60,9 @@ const carryOvers = computed(() =>
   incStore.carryOverIncidents.filter((i) => i.libraryId === lib.value.id)
 )
 
-const inspection = computed(() => inspStore.ofDate(lib.value.id, todayStr()))
+const inspection = computed(() => inspStore.current(lib.value.id))
 const inspProgress = computed(() => inspStore.progress(inspection.value))
+const lastArchive = computed(() => inspStore.archives(lib.value.id)[0] ?? null)
 
 // 座位图（演示 60 个座位号，实际以在馆记录为准）
 const seatNumbers = computed(() => {
@@ -66,10 +75,6 @@ const seatNumbers = computed(() => {
 })
 function visitAtSeat(seat: string) {
   return visits.value.find((v) => v.seatNo === seat)
-}
-
-function openIncident(id: string) {
-  selected.value = incStore.incidents.find((i) => i.id === id) ?? null
 }
 
 function triggerBlackout() {
@@ -97,7 +102,7 @@ function triggerBlackout() {
       branch.setDeviceStatus(d.id, d.type === 'camera' ? 'offline' : 'off')
     }
   }
-  selected.value = inc
+  incidentViewer.show(inc)
 }
 
 function jumpClose() {
@@ -156,7 +161,7 @@ const nightDevices = computed(() =>
         <div class="k-ico" style="opacity:.9">🌙</div>
         <div class="k-label">距 {{ lib.closeTime }} 闭馆</div>
         <div class="countdown" :class="{ over: system.isNight }">{{ fmtCountdown(system.msToClose) }}</div>
-        <div class="small mt8" style="color:#a9bdd4">开馆 {{ lib.openTime }} · 今日 {{ todayStr() }}</div>
+        <div class="small mt8" style="color:#a9bdd4">开馆 {{ lib.openTime }} · 营业日 {{ inspStore.currentDate(lib.id) }}</div>
       </div>
       <div class="kpi" :class="{ alert: abnormalDevices.length }">
         <div class="k-ico">🛠️</div>
@@ -292,6 +297,24 @@ const nightDevices = computed(() =>
         </div>
 
         <div class="card">
+          <div class="card-hd"><h3>📜 最近夜间交接档案</h3>
+            <div class="spacer"></div>
+            <span class="small muted" v-if="lastArchive">{{ lastArchive.date }} · 已固化</span>
+          </div>
+          <div class="card-bd" v-if="lastArchive">
+            <div class="small">
+              <span class="tag st-ok">🔒 已完成交接</span>
+              完成于 {{ new Date(lastArchive.archive!.finishedAt).getMonth() + 1 }}月{{ new Date(lastArchive.archive!.finishedAt).getDate() }}日
+              · 异常 {{ lastArchive.items.filter(i => i.state === 'abnormal').length }} 项
+              · 移交遗留 {{ incStore.openCarryOfArchive(lastArchive.id).length }} 件未闭环
+            </div>
+            <div class="small muted mt8">含 12 项巡检结果、四方签字、灯光空调复核，永久只读可追溯。</div>
+            <button class="btn ghost sm mt8" @click="openArchive(lastArchive.id)">📜 查看交接档案</button>
+          </div>
+          <div class="card-bd small muted" v-else>尚无已完成的夜间交接档案。</div>
+        </div>
+
+        <div class="card">
           <div class="card-hd"><h3>📹 夜间无人技防状态</h3>
             <div class="spacer"></div>
             <RouterLink class="small" to="/devices">详情 →</RouterLink>
@@ -314,7 +337,5 @@ const nightDevices = computed(() =>
         </div>
       </div>
     </div>
-
-    <IncidentDrawer :incident="selected" @close="selected = null" />
   </div>
 </template>

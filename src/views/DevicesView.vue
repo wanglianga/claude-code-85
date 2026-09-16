@@ -8,8 +8,8 @@ import { useAuthStore } from '@/stores/auth'
 import { deviceStatusMeta, deviceTypeMeta } from '@/data/meta'
 import { fmtDateTime } from '@/utils/format'
 import type { Device, DeviceStatus } from '@/types'
-import IncidentDrawer from '@/components/IncidentDrawer.vue'
 import { useToast } from '@/composables/useToast'
+import { useIncidentViewer } from '@/composables/useIncidentViewer'
 
 const system = useSystemStore()
 const branch = useBranchStore()
@@ -17,6 +17,7 @@ const incStore = useIncidentStore()
 const auth = useAuthStore()
 const toast = useToast()
 const { now } = storeToRefs(system)
+const incidentViewer = useIncidentViewer()
 
 const readOnly = computed(() => auth.account?.role === 'volunteer' || auth.account?.role === 'service')
 const isMaintainer = computed(() => auth.account?.role === 'maintainer' || auth.account?.role === 'admin')
@@ -75,7 +76,7 @@ function reportFault(d: Device) {
     deviceId: d.id
   })
   toast.bad('已生成设备故障事件并派单设备维护')
-  selected.value = inc
+  incidentViewer.show(inc)
 }
 
 function emptyBox(d: Device) {
@@ -95,7 +96,6 @@ function emptyBox(d: Device) {
   }
 }
 
-const selected = ref<any>(null)
 </script>
 
 <template>
@@ -214,7 +214,5 @@ const selected = ref<any>(null)
         </div>
       </div>
     </div>
-
-    <IncidentDrawer :incident="selected" @close="selected = null" />
   </div>
 </template>
