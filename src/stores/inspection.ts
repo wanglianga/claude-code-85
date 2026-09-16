@@ -14,6 +14,7 @@ import { useIncidentStore } from '@/stores/incident'
 import { useBranchStore } from '@/stores/branch'
 import { useSystemStore } from '@/stores/system'
 import { useStrandedStore } from '@/stores/stranded'
+import { useFaultsStore } from '@/stores/faults'
 import { fmtDate } from '@/utils/format'
 
 function clone<T>(v: T): T {
@@ -49,6 +50,8 @@ export interface OpenDayResult {
   archive: Inspection | null
   /** 新日继续待办、可回链前夜档案的遗留事件数 */
   carryCount: number
+  /** 跨日交接的未修复设备故障工单数（开馆前需管理员逐一确认） */
+  carriedFaultCount: number
 }
 
 export const useInspectionStore = defineStore('inspection', () => {
@@ -206,6 +209,10 @@ export const useInspectionStore = defineStore('inspection', () => {
       .strandedVisits(libraryId)
       .filter((v) => v.strandedHandling!.discoveredAt <= at)
       .map((v) => v.id)
+    const faultsStore = useFaultsStore()
+    const carriedFaultIds = faultsStore.openReports
+      .filter((r) => r.libraryId === libraryId)
+      .map((r) => r.id)
     const snapshot: HandoverSnapshot = {
       finishedAt: at,
       items: clone(insp.items),
@@ -214,7 +221,8 @@ export const useInspectionStore = defineStore('inspection', () => {
       closedBy: actor,
       conclusion: conclusion || '人员、图书、设备、公共安全四方交接完成，书房转入夜间无人值守模式。',
       carryIncidentIds: carryIds,
-      strandedVisitIds
+      strandedVisitIds,
+      carriedFaultIds
     }
     insp.finishedAt = at
     insp.archive = snapshot
@@ -241,34 +249,40 @@ export const useInspectionStore = defineStore('inspection', () => {
     const system = useSystemStore()
     const branch = useBranchStore()
     const incidentStore = useIncidentStore()
+    const faultsStore = useFaultsStore()
     const lib = system.libraries.find((l) => l.id === libraryId)
 
     const currentD = currentDate(libraryId)
     const lastArchive = archives(libraryId)[0] ?? null
     const carryOf = (a: Inspection | null) => (a ? incidentStore.openCarryOfArchive(a.id).length : 0)
+    const pendingFaultCount = () => faultsStore.pendingOpenDecision(libraryId).length
 
     // 仅当“当前营业日已完成闭馆交接”才允许开下一日；否则无副作用返回
     if (!lastArchive || lastArchive.date !== currentD) {
-      return { switched: false, newDate: currentD, archive: lastArchive, carryCount: carryOf(lastArchive) }
+      return { switched: false, newDate: currentD, archive: lastArchive, carryCount: carryOf(lastArchive), carriedFaultCount: pendingFaultCount() }
     }
 
     const newDate = nextDateStr(currentD)
 
     // 幂等：营业日已推进到次日（前夜档案日期早于当前营业日），重复点击不再产生任何副作用
     if (currentD === newDate || businessDay.value[libraryId] === newDate) {
-      return { switched: false, newDate, archive: lastArchive, carryCount: carryOf(lastArchive) }
+      return { switched: false, newDate, archive: lastArchive, carryCount: carryOf(lastArchive), carriedFaultCount: pendingFaultCount() }
     }
 
     businessDay.value[libraryId] = newDate
     // 创建新营业日的空白巡检单（历史档案保持 frozen，不被修改）
     ofDate(libraryId, newDate)
 
-    // 仅恢复可运营设备：只动“闭馆关闭/off”的设备；故障/告警/离线/满箱保留
+    // 未修复设备故障工单跨日交接：照片/报修时间/影响读者/维修联系人原样保留到新营业日
+    const carriedFaultIds = faultsStore.carryOver(libraryId, newDate)
+
+    // 仅恢复可运营设备：只动“闭馆关闭/off”的设备；
+    // 故障/告警/离线/满箱以及有未修复故障工单的设备一律保留，继续作为遗留待办
     for (const d of branch.devicesOf(libraryId)) {
-      if (d.status === 'off') {
-        if (d.type === 'camera') branch.setDeviceStatus(d.id, 'online', '次日开馆恢复')
-        else branch.setDeviceStatus(d.id, 'normal', '次日开馆恢复')
-      }
+      if (d.status !== 'off') continue
+      if (faultsStore.faultOfDevice(d.id)) continue
+      if (d.type === 'camera') branch.setDeviceStatus(d.id, 'online', '次日开馆恢复')
+      else branch.setDeviceStatus(d.id, 'normal', '次日开馆恢复')
     }
 
     if (lib) system.setLibraryStatus(libraryId, 'open')
@@ -285,7 +299,8 @@ export const useInspectionStore = defineStore('inspection', () => {
       switched: true,
       newDate,
       archive: lastArchive,
-      carryCount: lastArchive ? incidentStore.openCarryOfArchive(lastArchive.id).length : 0
+      carryCount: lastArchive ? incidentStore.openCarryOfArchive(lastArchive.id).length : 0,
+      carriedFaultCount: carriedFaultIds.length
     }
   }
 

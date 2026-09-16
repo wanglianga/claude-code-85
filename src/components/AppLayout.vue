@@ -11,6 +11,8 @@ import { resetDemoData } from '@/stores/persist'
 import IncidentDrawer from '@/components/IncidentDrawer.vue'
 import HandoverArchiveDrawer from '@/components/HandoverArchiveDrawer.vue'
 import StrandedDrawer from '@/components/StrandedDrawer.vue'
+import FaultDrawer from '@/components/FaultDrawer.vue'
+import FaultCreateDrawer from '@/components/FaultCreateDrawer.vue'
 import { useIncidentViewer } from '@/composables/useIncidentViewer'
 import { useStrandedViewer } from '@/composables/useStrandedViewer'
 
@@ -161,5 +163,8 @@ function resetDemo() {
     <HandoverArchiveDrawer />
     <!-- 夜间滞留处置抽屉 -->
     <StrandedDrawer />
+    <!-- 设备故障工单抽屉 -->
+    <FaultDrawer />
+    <FaultCreateDrawer />
   </div>
 </template>

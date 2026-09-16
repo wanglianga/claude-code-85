@@ -3,19 +3,23 @@ import { computed } from 'vue'
 import { useArchiveViewer } from '@/composables/useArchiveViewer'
 import { useIncidentViewer } from '@/composables/useIncidentViewer'
 import { useStrandedViewer } from '@/composables/useStrandedViewer'
+import { useFaultViewer } from '@/composables/useFaultViewer'
 import { useSystemStore } from '@/stores/system'
 import { useIncidentStore } from '@/stores/incident'
 import { useBranchStore } from '@/stores/branch'
-import { incidentTypeMeta, severityMeta } from '@/data/meta'
+import { useFaultsStore } from '@/stores/faults'
+import { incidentTypeMeta, severityMeta, deviceTypeMeta } from '@/data/meta'
 import { fmtDateTime, fmtTime } from '@/utils/format'
-import type { CheckState, Visit } from '@/types'
+import type { CheckState, DeviceFaultReport, Visit } from '@/types'
 
 const archiveViewer = useArchiveViewer()
 const incidentViewer = useIncidentViewer()
 const strandedViewer = useStrandedViewer()
+const faultViewer = useFaultViewer()
 const system = useSystemStore()
 const incStore = useIncidentStore()
 const branch = useBranchStore()
+const faults = useFaultsStore()
 
 const archive = computed(() => archiveViewer.archive.value)
 
@@ -53,6 +57,18 @@ const strandedVisits = computed<Visit[]>(() => {
 function openStranded(v: Visit) {
   archiveViewer.close()
   strandedViewer.open(v.id)
+}
+
+/** 随档案跨日交接的未修复设备故障工单 */
+const carriedFaults = computed<DeviceFaultReport[]>(() => {
+  if (!archive.value?.archive?.carriedFaultIds) return []
+  return archive.value.archive.carriedFaultIds
+    .map((id) => faults.byId(id))
+    .filter((f): f is DeviceFaultReport => !!f)
+})
+function openFault(id: string) {
+  archiveViewer.close()
+  faultViewer.open(id)
 }
 
 const sigRows = computed(() => [
@@ -194,6 +210,30 @@ function sigName(key: 'people' | 'books' | 'devices' | 'safety'): string {
                     <span v-else class="bad-text">未离馆</span>
                   </td>
                   <td class="right"><button class="mini-btn" @click="openStranded(v)">处置记录</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 跨日交接的设备故障工单 -->
+        <div class="card" v-if="carriedFaults.length">
+          <div class="card-hd">
+            <h3>🛠️ 跨日设备故障工单（{{ carriedFaults.length }}）</h3>
+            <span class="sub">照片/报修时间/影响读者/维修联系人已保留到次日，开馆前确认停用或临时恢复</span>
+          </div>
+          <div class="card-bd flush">
+            <table class="tbl">
+              <thead><tr><th>工单</th><th>设备</th><th>报修时间</th><th>照片</th><th>影响</th><th>联系人</th><th class="right">详情</th></tr></thead>
+              <tbody>
+                <tr v-for="f in carriedFaults" :key="f.id" class="clickable" @click="openFault(f.id)">
+                  <td class="small">{{ f.no }}</td>
+                  <td class="small"><b>{{ f.deviceName }}</b><div class="muted">{{ deviceTypeMeta[f.deviceType] }}</div></td>
+                  <td class="small nowrap">{{ fmtDateTime(f.reportedAt) }}</td>
+                  <td>{{ f.photos.length }} 张</td>
+                  <td class="small">{{ f.affectedReaderCount }} 人次</td>
+                  <td class="small">{{ f.maintainerName }}<div class="muted">{{ f.maintainerPhone }}</div></td>
+                  <td class="right"><button class="mini-btn" @click.stop="openFault(f.id)">工单</button></td>
                 </tr>
               </tbody>
             </table>

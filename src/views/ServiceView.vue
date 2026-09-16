@@ -9,15 +9,20 @@ import { entryMethodMeta, serviceKindMeta, bookStatusMeta } from '@/data/meta'
 import { fmtTime, maskIdCard } from '@/utils/format'
 import type { EntryMethod, Reader, ServiceKind } from '@/types'
 import { useToast } from '@/composables/useToast'
+import { useFaultsStore } from '@/stores/faults'
+import { useFaultViewer } from '@/composables/useFaultViewer'
 
 const system = useSystemStore()
 const branch = useBranchStore()
 const incStore = useIncidentStore()
 const auth = useAuthStore()
 const toast = useToast()
+const faults = useFaultsStore()
+const faultViewer = useFaultViewer()
 const { now } = storeToRefs(system)
 
 const readOnly = computed(() => auth.account?.role === 'volunteer')
+const activeManualFaults = computed(() => faults.activeManualReports(system.currentLibraryId))
 
 // ---------------- 入馆登记 ----------------
 const method = ref<EntryMethod>('idcard')
@@ -244,6 +249,25 @@ function registerComplaint() {
 
 <template>
   <div>
+    <!-- 设备故障停用期间：临时人工借还 -->
+    <div v-if="activeManualFaults.length" class="banner danger">
+      <span style="font-size:20px">📋</span>
+      <div>
+        <b>临时人工借还进行中：</b>
+        <span v-for="f in activeManualFaults" :key="f.id" style="margin-right:10px">
+          {{ f.deviceName }}（{{ f.manualSession?.records.length ?? 0 }} 笔）
+          <a href="#" @click.prevent="faultViewer.open(f.id)">前往登记 →</a>
+        </span>
+        <div class="small">设备停用期间在服务台登记经办人与图书条码，结束后补生成设备故障说明，再补入系统。</div>
+      </div>
+    </div>
+    <div v-else-if="faults.continueClosed(system.currentLibraryId).filter(f => faults.manualCapable(f)).length" class="banner warn">
+      <span style="font-size:20px">⚠️</span>
+      <div>
+        <b>借还设备继续停用：</b>请在故障工单中启动「人工借还」兜底，避免开馆后读者无处处理图书。
+      </div>
+      <button class="btn amber sm" @click="faultViewer.open(faults.continueClosed(system.currentLibraryId).filter(f => faults.manualCapable(f))[0].id)">打开工单</button>
+    </div>
     <div class="grid" style="grid-template-columns: 1.15fr 1fr">
       <!-- 入馆登记 -->
       <div class="card">

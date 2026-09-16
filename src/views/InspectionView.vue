@@ -174,7 +174,10 @@ function openNextDay() {
     return
   }
   afterClose.value = false
-  toast.ok(`🌅 ${result.newDate} 开馆：前夜交接档案保持只读，${result.carryCount} 件遗留待办继续督办（可回链档案）`)
+  const faultMsg = result.switched && result.carriedFaultCount
+    ? `；${result.carriedFaultCount} 起未修复设备故障已跨日保留，请开馆前确认停用/临时恢复（借还机停用需启用人工借还）`
+    : ''
+  toast.ok(`🌅 ${result.newDate} 开馆：前夜交接档案保持只读，${result.carryCount} 件遗留待办继续督办（可回链档案）${faultMsg}`)
   if (result.archive) archiveViewer.open(result.archive.id)
 }
 

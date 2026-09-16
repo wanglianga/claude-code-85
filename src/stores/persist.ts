@@ -1,7 +1,7 @@
 import type { PiniaPluginContext } from 'pinia'
 
 // localStorage 持久化：按 store 白名单保存关键状态（演示数据可跨刷新保留）
-const STORAGE_KEY = 'urban-studyroom-state-v3'
+const STORAGE_KEY = 'urban-studyroom-state-v4'
 
 const PERSIST_KEYS: Record<string, string[]> = {
   auth: ['account'],
@@ -11,7 +11,8 @@ const PERSIST_KEYS: Record<string, string[]> = {
     'lostItems', 'complaints', 'patrols', 'transfers', 'creditRecords', 'activities'
   ],
   incident: ['incidents'],
-  inspection: ['inspections', 'businessDay']
+  inspection: ['inspections', 'businessDay'],
+  faults: ['reports']
 }
 
 interface SavedState {

@@ -369,6 +369,57 @@ export const seedIncidents: Incident[] = [
   })
 ]
 
+function faultPhoto(label: string, color: string): string {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='200'><rect width='320' height='200' fill='${color}'/><text x='160' y='95' font-size='18' fill='#fff' text-anchor='middle' font-family='sans-serif'>${label}</text><text x='160' y='125' font-size='12' fill='#e8eef5' text-anchor='middle' font-family='sans-serif'>设备故障现场照片（演示）</text></svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
+export const seedFaultReports: import('@/types').DeviceFaultReport[] = [
+  {
+    id: uid('fr'),
+    no: 'WX-20260916-001',
+    libraryId: 'lib-zhongshan',
+    deviceId: 'd-kiosk-1',
+    deviceName: '1号自助借还机',
+    deviceType: 'selfkiosk',
+    faultDesc: '消磁器报错 E17，还书时图书磁条无法解除，借还机消磁通道停用；打印凭条功能正常。',
+    reportedAt: now - 22 * min,
+    reporter: '陈服（读者服务）',
+    photos: [
+      { id: uid('p'), name: '消磁器报错E17.jpg', dataUrl: faultPhoto('消磁器报错 E17', '#5a2b31'), takenAt: now - 22 * min, note: '屏幕报错特写' },
+      { id: uid('p'), name: '设备铭牌.jpg', dataUrl: faultPhoto('1号自助借还机', '#2a4d78'), takenAt: now - 21 * min, note: '设备编号铭牌' }
+    ],
+    affectedReaderCount: 6,
+    affectedDesc: '截至闭馆前 6 名读者还书受影响，其中 1 册《人类简史》已人工暂扣；晚间读者无法自助借还。',
+    maintainerName: '赵工（设备维护）',
+    maintainerPhone: '138****6677',
+    maintainerCompany: '市图书馆设备运维中心（24 小时报修）',
+    status: 'open',
+    incidentId: seedIncidents.find((i) => i.deviceId === 'd-kiosk-1' && i.type === 'device-fault')?.id
+  },
+  {
+    id: uid('fr'),
+    no: 'WX-20260915-007',
+    libraryId: 'lib-jiangnan',
+    deviceId: 'd-gate-4',
+    deviceName: '入口门禁闸机',
+    deviceType: 'gate',
+    faultDesc: '正门门禁读卡器无响应，昨晚靠人工核验出入，今日开馆前必须确认停用/恢复。',
+    reportedAt: now - 9 * 60 * min,
+    reporter: '夜班管理员',
+    photos: [
+      { id: uid('p'), name: '读卡器无响应.jpg', dataUrl: faultPhoto('门禁读卡器无响应', '#5a2b31'), takenAt: now - 9 * 60 * min }
+    ],
+    affectedReaderCount: 0,
+    affectedDesc: '影响次日开馆入馆核验效率',
+    maintainerName: '门禁厂商 王工',
+    maintainerPhone: '400-820-1166',
+    maintainerCompany: '安行门禁维保',
+    status: 'carried-over',
+    carriedToDate: new Date(now).toISOString().slice(0, 10)
+  }
+]
+
 export function buildTodayInspection(libraryId: string): Inspection {
   const items: Inspection['items'] = [
     { key: 'people', label: '人员清场（含卫生间/书架间/亲子区逐一核查）', scope: 'handover', state: 'pending' },

@@ -4,20 +4,24 @@ import { storeToRefs } from 'pinia'
 import { useSystemStore } from '@/stores/system'
 import { useBranchStore } from '@/stores/branch'
 import { useIncidentStore } from '@/stores/incident'
+import { useFaultsStore } from '@/stores/faults'
 import { useAuthStore } from '@/stores/auth'
 import { deviceStatusMeta, deviceTypeMeta } from '@/data/meta'
-import { fmtDateTime } from '@/utils/format'
+import { fmtDateTime, fmtTime } from '@/utils/format'
 import type { Device, DeviceStatus } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { useIncidentViewer } from '@/composables/useIncidentViewer'
+import { useFaultViewer } from '@/composables/useFaultViewer'
 
 const system = useSystemStore()
 const branch = useBranchStore()
 const incStore = useIncidentStore()
+const faults = useFaultsStore()
 const auth = useAuthStore()
 const toast = useToast()
 const { now } = storeToRefs(system)
 const incidentViewer = useIncidentViewer()
+const faultViewer = useFaultViewer()
 
 const readOnly = computed(() => auth.account?.role === 'volunteer' || auth.account?.role === 'service')
 const isMaintainer = computed(() => auth.account?.role === 'maintainer' || auth.account?.role === 'admin')
@@ -38,6 +42,9 @@ const abnormalCount = computed(() =>
   devices.value.filter((d) => ['fault', 'alarm', 'offline'].includes(d.status)).length
 )
 
+const faultReports = computed(() => faults.ofLibrary(system.currentLibraryId))
+const pendingDecisions = computed(() => faults.pendingOpenDecision(system.currentLibraryId))
+
 function changeStatus(d: Device, status: DeviceStatus) {
   branch.setDeviceStatus(d.id, status, d.note)
   if (status === 'normal' || status === 'online') {
@@ -47,36 +54,12 @@ function changeStatus(d: Device, status: DeviceStatus) {
   }
 }
 
+/** 上报故障：打开故障工单抽屉（照片/联系人/影响；同步生成事件） */
 function reportFault(d: Device) {
-  branch.setDeviceStatus(d.id, 'fault', d.note || '人工上报故障')
-  const typeMap: Partial<Record<Device['type'], any>> = {
-    gate: ['gate-abnormal', 'high', '门禁异常'],
-    camera: ['camera-offline', 'high', '摄像头离线'],
-    selfkiosk: ['device-fault', 'medium', '自助借还机故障'],
-    printer: ['device-fault', 'low', '打印机故障'],
-    water: ['device-fault', 'low', '饮水机故障'],
-    ac: ['device-fault', 'low', '空调故障'],
-    light: ['light-ac-on', 'low', '照明异常'],
-    audio: ['abnormal-sound', 'high', '异常声音监测告警'],
-    fire: ['fire-alarm', 'urgent', '消防系统告警'],
-    help: ['help-request', 'high', '求助按钮告警'],
-    returnbox: ['box-full', 'medium', '还书箱异常'],
-    ups: ['device-fault', 'high', 'UPS/应急电源异常']
-  }
-  const [type, severity, title] = typeMap[d.type] ?? ['device-fault', 'medium', '设备故障']
-  const inc = incStore.create({
-    libraryId: system.currentLibraryId,
-    type,
-    severity,
-    title: `${title}：${d.name}`,
-    detail: `设备维护/巡检上报：${d.name}（位置：${d.location}）状态异常。${d.note ? '现象：' + d.note + '。' : ''}请设备维护到场检修，读者服务张贴提示并引导备用设备，夜间事件由安保联动技防处置。`,
-    at: now.value,
-    night: system.isNight,
-    owner: 'maintainer',
-    deviceId: d.id
-  })
-  toast.bad('已生成设备故障事件并派单设备维护')
-  incidentViewer.show(inc)
+  faultViewer.openCreate(d.id)
+}
+function openFault(id: string) {
+  faultViewer.open(id)
 }
 
 function emptyBox(d: Device) {
@@ -96,6 +79,20 @@ function emptyBox(d: Device) {
   }
 }
 
+const faultStatusCls: Record<string, string> = {
+  open: 'st-bad',
+  'carried-over': 'sev-high',
+  'continue-closed': 'st-bad',
+  'temporary-recovery': 'st-warn',
+  repaired: 'st-ok'
+}
+const faultStatusLabel: Record<string, string> = {
+  open: '当日故障',
+  'carried-over': '跨日待开馆确认',
+  'continue-closed': '继续停用',
+  'temporary-recovery': '临时恢复',
+  repaired: '已修复'
+}
 </script>
 
 <template>
@@ -135,6 +132,47 @@ function emptyBox(d: Device) {
       </div>
     </div>
 
+    <!-- 开馆前必须确认的跨日故障 -->
+    <div v-if="pendingDecisions.length" class="banner danger">
+      <span style="font-size:20px">🌅</span>
+      <div>
+        <b>开馆前确认：</b>{{ pendingDecisions.length }} 起设备故障跨日未修复，请管理员确认「继续停用（启用人工借还兜底）」或「临时恢复」，避免读者开馆后无处处理图书。
+      </div>
+      <button class="btn amber sm" @click="openFault(pendingDecisions[0].id)">立即确认 →</button>
+    </div>
+
+    <!-- 故障工单（跨日交接） -->
+    <div class="card">
+      <div class="card-hd">
+        <h3>🛠️ 设备故障工单（跨日交接）</h3>
+        <span class="sub">照片、报修时间、影响读者、维修联系人保留到次日；人工借还结束后自动补生成故障说明</span>
+      </div>
+      <div class="card-bd flush">
+        <table class="tbl">
+          <thead><tr><th>工单</th><th>设备</th><th>报修时间</th><th>照片</th><th>影响</th><th>维修联系人</th><th>状态</th><th>人工借还</th><th class="right">操作</th></tr></thead>
+          <tbody>
+            <tr v-for="f in faultReports" :key="f.id" class="clickable" @click="openFault(f.id)">
+              <td class="small">{{ f.no }}</td>
+              <td><b>{{ f.deviceName }}</b><div class="small muted">{{ f.faultDesc.slice(0, 22) }}…</div></td>
+              <td class="small nowrap">{{ fmtDateTime(f.reportedAt) }}<div class="muted">{{ f.reporter }}</div></td>
+              <td>{{ f.photos.length }} 张</td>
+              <td class="small">{{ f.affectedReaderCount }} 人次</td>
+              <td class="small">{{ f.maintainerName }}<div class="muted">{{ f.maintainerPhone }}</div></td>
+              <td><span class="tag" :class="faultStatusCls[f.status]">{{ faultStatusLabel[f.status] }}</span>
+                <div v-if="f.carriedToDate" class="small muted">至 {{ f.carriedToDate }}</div></td>
+              <td class="small">
+                <span v-if="f.manualSession?.status === 'active'" class="tag st-bad">进行中 {{ f.manualSession.records.length }} 笔</span>
+                <span v-else-if="f.manualSession" class="tag st-ok">已结束 {{ f.statement?.recordCount ?? 0 }} 笔</span>
+                <span v-else class="muted">—</span>
+              </td>
+              <td class="right"><button class="mini-btn" @click.stop="openFault(f.id)">处理</button></td>
+            </tr>
+            <tr v-if="!faultReports.length"><td colspan="9" class="empty">暂无故障工单</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="grid grid-2">
       <div class="card">
         <div class="card-hd"><h3>📹 无人值守技防设备</h3>
@@ -154,7 +192,10 @@ function emptyBox(d: Device) {
                 <td class="small muted nowrap">{{ d.lastCheck ? fmtDateTime(d.lastCheck) : '—' }}</td>
                 <td class="right">
                   <button class="mini-btn" @click="reportFault(d)" :disabled="readOnly">上报异常</button>
-                  <button v-if="isMaintainer && d.status !== 'normal' && d.status !== 'online'" class="mini-btn" style="margin-left:4px" @click="changeStatus(d, d.type === 'camera' ? 'online' : 'normal')">修复</button>
+                  <button v-if="faults.faultOfDevice(d.id)" class="mini-btn" style="margin-left:4px;border-color:#e6aab3;color:var(--bad)" @click.stop="openFault(faults.faultOfDevice(d.id)!.id)">
+                    工单 {{ faults.faultOfDevice(d.id)!.carriedToDate ? '·跨日' : '' }}
+                  </button>
+                  <button v-else-if="isMaintainer && d.status !== 'normal' && d.status !== 'online'" class="mini-btn" style="margin-left:4px" @click="changeStatus(d, d.type === 'camera' ? 'online' : 'normal')">修复</button>
                 </td>
               </tr>
             </tbody>
@@ -187,8 +228,11 @@ function emptyBox(d: Device) {
                   <button v-if="d.type === 'returnbox'" class="mini-btn" @click="emptyBox(d)" :disabled="readOnly">清运复位</button>
                   <template v-else>
                     <button class="mini-btn" @click="reportFault(d)" :disabled="readOnly">上报故障</button>
-                    <button v-if="isMaintainer && d.status === 'fault'" class="mini-btn" style="margin-left:4px" @click="changeStatus(d, 'normal')">修复</button>
-                    <button v-if="(d.type === 'ac' || d.type === 'light' || d.type === 'selfkiosk') && isMaintainer" class="mini-btn" style="margin-left:4px"
+                    <button v-if="faults.faultOfDevice(d.id)" class="mini-btn" style="margin-left:4px;border-color:#e6aab3;color:var(--bad)" @click.stop="openFault(faults.faultOfDevice(d.id)!.id)">
+                      工单
+                    </button>
+                    <button v-else-if="isMaintainer && d.status === 'fault'" class="mini-btn" style="margin-left:4px" @click="changeStatus(d, 'normal')">修复</button>
+                    <button v-if="(d.type === 'ac' || d.type === 'light' || d.type === 'selfkiosk') && isMaintainer && !faults.faultOfDevice(d.id)" class="mini-btn" style="margin-left:4px"
                       @click="changeStatus(d, d.status === 'off' ? 'normal' : 'off')">
                       {{ d.status === 'off' ? '开启' : '关闭' }}
                     </button>

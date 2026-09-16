@@ -271,6 +271,110 @@ export interface Incident {
   actions: IncidentAction[]
 }
 
+/** 人工借还台账记录（设备停用期间兜底，后续补入系统） */
+export interface ManualServiceRecord {
+  id: string
+  at: number
+  /** 经办人 */
+  operator: string
+  /** 读者姓名/凭证 */
+  readerName: string
+  /** 图书条码 */
+  bookBarcode: string
+  kind: 'borrow' | 'return'
+  note?: string
+  /** 是否已补入自助系统 */
+  backfilled: boolean
+  backfilledAt?: number
+  backfilledBy?: string
+}
+
+export interface ManualServiceSession {
+  id: string
+  startedAt: number
+  startedBy: string
+  reason: string
+  status: 'active' | 'ended'
+  records: ManualServiceRecord[]
+  endedAt?: number
+  endedBy?: string
+}
+
+/** 故障照片 */
+export interface FaultPhoto {
+  id: string
+  name: string
+  /** 图片（dataURL 或预置 svg URL） */
+  dataUrl: string
+  takenAt: number
+  note?: string
+}
+
+/** 开馆前故障处置决策 */
+export interface FaultOpenDecision {
+  /** 继续停用 / 临时恢复 */
+  decision: 'continue-closed' | 'temporary-recovery'
+  decidedBy: string
+  at: number
+  note?: string
+  /** 是否启动人工借还（继续停用借还机/打印机时） */
+  manualService: boolean
+}
+
+/** 人工借还结束后补生成的设备故障说明 */
+export interface DeviceFaultStatement {
+  generatedAt: number
+  generatedBy: string
+  content: string
+  recordCount: number
+  borrowCount: number
+  returnCount: number
+}
+
+export type FaultReportStatus =
+  | 'open' // 当日故障未修复
+  | 'carried-over' // 跨日交接
+  | 'continue-closed' // 开馆前确认继续停用（人工借还兜底中）
+  | 'temporary-recovery' // 开馆前确认临时恢复
+  | 'repaired' // 已修复关闭
+
+/** 设备故障工单（跨日交接的核心载体） */
+export interface DeviceFaultReport {
+  id: string
+  no: string
+  libraryId: string
+  deviceId: string
+  deviceName: string
+  deviceType: DeviceType
+  faultDesc: string
+  /** 报修时间 */
+  reportedAt: number
+  reporter: string
+  photos: FaultPhoto[]
+  /** 影响读者（人次估计 + 说明） */
+  affectedReaderCount: number
+  affectedDesc: string
+  /** 维修联系人 */
+  maintainerName: string
+  maintainerPhone: string
+  maintainerCompany: string
+  status: FaultReportStatus
+  /** 跨日交接日期（YYYY-MM-DD，开馆后的营业日） */
+  carriedToDate?: string
+  /** 开馆前确认 */
+  openDecision?: FaultOpenDecision
+  /** 人工借还会话 */
+  manualSession?: ManualServiceSession
+  /** 人工借还结束后补生成的故障说明 */
+  statement?: DeviceFaultStatement
+  /** 修复信息 */
+  repairedAt?: number
+  repairedBy?: string
+  repairNote?: string
+  /** 关联事件 */
+  incidentId?: string
+}
+
 // ---------------- 闭馆巡检 ----------------
 
 export type CheckKey =
@@ -320,6 +424,8 @@ export interface HandoverSnapshot {
   carryIncidentIds: string[]
   /** 本夜间完成的滞留处置记录（在馆记录 id，处置详情在 visits 中永久保存） */
   strandedVisitIds: string[]
+  /** 随档案跨日移交的未修复设备故障工单 id（照片/报修时间/影响/联系人保留到次日） */
+  carriedFaultIds: string[]
 }
 
 export interface Inspection {
