@@ -1,0 +1,17 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: urban-studyroom:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-task-studyroom}-app
+    # 仅发布应用端口到宿主；本应用为纯前端（Pinia + 浏览器本地持久化），无数据库/缓存端口暴露
+    ports:
+      - "${CC_PUBLISH_PORT:-3085}:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 8s
