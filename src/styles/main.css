@@ -320,3 +320,121 @@ table.tbl tr.clickable:hover td { background: #faf7f0; }
 .credit-bar { width: 90px; height: 7px; border-radius: 99px; background: var(--paper-2); display:inline-block; overflow:hidden; vertical-align:middle;}
 .credit-bar > div { height:100%; }
 .good-text{color:var(--good);} .warn-text{color:var(--warn);} .bad-text{color:var(--bad);}
+
+/* ================ 停电应急联动 ================ */
+/* 全局应急覆盖层（停电瞬间强制切到应急视图） */
+.emergency-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: radial-gradient(1200px 600px at 70% -10%, rgba(224,145,0,.18), transparent),
+    linear-gradient(160deg, #0c1420, #17263c 60%, #0c1420);
+  color: #e8eef7; overflow-y: auto;
+}
+.emg-head {
+  position: sticky; top: 0; z-index: 5;
+  background: linear-gradient(90deg,#3b0a14,#7a1626); color:#ffe7ea;
+  padding: 12px 22px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
+}
+.emg-head .emg-title { font-size:19px; font-weight:800; letter-spacing:1px; }
+.emg-head .emg-clock { font-variant-numeric: tabular-nums; font-size:18px; font-weight:700; }
+.emg-body { padding: 18px 22px 60px; max-width: 1320px; margin: 0 auto; }
+.emg-card {
+  background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12);
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
+}
+.emg-card h3 { color:#fff; font-size:15px; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+.emg-card .sub { color:#9fb3cc; font-size:12px; font-weight:400; }
+.emg-grid { display:grid; gap:14px; }
+.emg-grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.emg-grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+@media (max-width:1100px){ .emg-grid-3,.emg-grid-2 { grid-template-columns: 1fr; } }
+.emg-stat {
+  background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
+  border-radius:10px; padding:12px 14px;
+}
+.emg-stat .lab { color:#9fb3cc; font-size:12px; }
+.emg-stat .val { font-size:26px; font-weight:800; font-variant-numeric: tabular-nums; margin-top:2px; }
+.emg-stat.bad { border-color:#e6aab3; background: rgba(209,73,91,.14); }
+.emg-stat.ok { border-color:#7fc7bd; background: rgba(42,157,143,.12); }
+.emg-stat.warn { border-color:#e9c06a; background: rgba(224,145,0,.13); }
+
+/* 受影响范围设备行 */
+.affect-row {
+  display:flex; align-items:center; gap:10px; padding:9px 10px;
+  border:1px solid rgba(255,255,255,.09); border-radius:9px; margin-bottom:7px; background:rgba(255,255,255,.03);
+}
+.affect-row .ico { font-size:18px; width:24px; text-align:center; }
+.affect-row .nm { font-weight:650; }
+.affect-row .loc { color:#9fb3cc; font-size:11.5px; }
+.affect-row .grow { flex:1; }
+.emg-pill {
+  display:inline-flex; align-items:center; gap:4px; border-radius:999px;
+  padding:2px 10px; font-size:11.5px; font-weight:700; white-space:nowrap;
+}
+.emg-pill.down { background:#5a1622; color:#ffd7de; }
+.emg-pill.up { background:#16403a; color:#9fe6da; }
+.emg-pill.warn { background:#5a4410; color:#ffe2a3; }
+.emg-pill.info { background:#1d3556; color:#bcd6f5; }
+
+.emg-btn {
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  border:1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color:#eef3fa;
+  border-radius:8px; padding:7px 13px; font-size:13px;
+}
+.emg-btn:hover:not(:disabled){ background:rgba(255,255,255,.16); }
+.emg-btn:disabled{ opacity:.4; cursor:not-allowed; }
+.emg-btn.danger { background: var(--bad); border-color:var(--bad); color:#fff; }
+.emg-btn.amber { background: var(--amber); border-color:var(--amber); color:#332500; font-weight:700; }
+.emg-btn.ok { background: var(--good); border-color:var(--good); color:#fff; }
+.emg-btn.sm { padding:4px 9px; font-size:12px; }
+.emg-input {
+  background: rgba(10,20,34,.7); border:1px solid rgba(255,255,255,.2); color:#eaf1fa;
+  border-radius:7px; padding:8px 10px; font-size:13px; font-family:inherit; width:100%;
+}
+.emg-input::placeholder{ color:#7388a1; }
+.emg-input option { color:#112; }
+
+/* 应急时间线 */
+.emg-timeline { max-height: 340px; overflow-y:auto; padding-right:6px; }
+.emg-timeline .tl-item::before { background: var(--amber); box-shadow:0 0 0 1px var(--amber); }
+.emg-timeline .tl-text { color:#d4dfee; }
+.emg-timeline .tl-time { color:#8ea3bb; }
+
+/* 紧急横幅强闪 */
+.emergency-siren {
+  background: linear-gradient(90deg,#7a1626,#b31232,#7a1626); background-size:200% 100%;
+  color:#fff; animation: siren 1.2s linear infinite;
+}
+@keyframes siren { 0%{background-position:0 0} 100%{background-position:200% 0} }
+
+/* 读者端应急通告屏 */
+.reader-screen {
+  min-height:100%;
+  background: radial-gradient(1000px 500px at 50% -10%, rgba(255,183,3,.2), transparent),
+    linear-gradient(170deg,#101d2f,#16263d 55%,#0c1420);
+  color:#f2f6fb; padding: 26px 20px 50px;
+}
+.reader-card {
+  max-width: 920px; margin: 0 auto 16px;
+  background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14);
+  border-radius:16px; padding:22px 26px;
+}
+.route-step {
+  display:flex; gap:12px; padding:12px 14px; border-left:4px solid var(--amber);
+  background:rgba(255,183,3,.08); border-radius:0 10px 10px 0; margin-bottom:10px;
+}
+.route-step .n { font-size:20px; font-weight:800; color:var(--amber); }
+
+/* 街道值班端 */
+.street-banner {
+  background: linear-gradient(90deg,#16263d,#2a4d78); color:#eaf1f9;
+  border-radius:12px; padding:16px 20px; margin-bottom:16px;
+}
+.street-lib-row {
+  display:flex; align-items:center; gap:12px; padding:12px 14px;
+  border:1px solid var(--line); border-radius:10px; margin-bottom:9px; background:#fff;
+}
+.street-lib-row.blackout { border-color:#e6aab3; background: linear-gradient(135deg,#fff,#fff6f7); }
+
+.phase-ribbon { display:inline-flex; gap:6px; flex-wrap:wrap; }
+

@@ -12,6 +12,7 @@ import { useIncidentViewer } from '@/composables/useIncidentViewer'
 import { useArchiveViewer } from '@/composables/useArchiveViewer'
 import { useStrandedViewer } from '@/composables/useStrandedViewer'
 import { useStrandedStore } from '@/stores/stranded'
+import { useBlackoutStore } from '@/stores/blackout'
 import { useToast } from '@/composables/useToast'
 import type { CheckItem, CheckState, Incident, Visit } from '@/types'
 
@@ -26,8 +27,16 @@ const incidentViewer = useIncidentViewer()
 const archiveViewer = useArchiveViewer()
 const strandedViewer = useStrandedViewer()
 const strandedStore = useStrandedStore()
+const blackoutStore = useBlackoutStore()
 
 const lib = computed(() => system.currentLibrary)
+/** 当前书房停电处置（未复盘；停电中或夜间来电六项未确认时阻塞闭馆完成） */
+const blackoutCase = computed(() => blackoutStore.blocksInspection(lib.value.id))
+const blackoutNightLeft = computed(() =>
+  blackoutCase.value && blackoutCase.value.phase !== 'active'
+    ? blackoutStore.nightConfirmMeta.filter((m) => !blackoutCase.value!.nightConfirms[m.key]).map((m) => m.label)
+    : []
+)
 /** 当前营业日巡检单（次日开馆后为新日期的新单，绝不是旧单“进行中”） */
 const insp = computed(() => inspStore.current(lib.value.id))
 const prog = computed(() => inspStore.progress(insp.value))
@@ -224,9 +233,24 @@ function openItemIncident(item: CheckItem) {
       </div>
     </div>
 
-    <div v-if="system.blackout" class="banner danger">
+    <div v-if="blackoutCase" class="banner danger">
       <span>⚡</span>
-      <div><b>停电期间巡检：</b>先完成人员疏散与清点（UPS 仅保障应急照明/技防），供电恢复后补检设备项；必要时提前闭馆并上报街道。</div>
+      <div>
+        <template v-if="blackoutCase.phase === 'active'">
+          <b>突发停电应急处置进行中：</b>巡检状态不允许完成。请先在应急指挥视图完成人员疏散清点、受影响范围核验、
+          借还暂存、紧急事件（被困/通道被占/烟感离线/应急灯不亮）处置，来电并完成自检后再继续。
+        </template>
+        <template v-else>
+          <b v-if="blackoutCase.emergencyReasons.length && !blackoutCase.emergencyCleared" class="bad-text">
+            🚨 停电紧急险情尚未排除（{{ blackoutCase.emergencyReasons.join('、') }}），巡检状态不允许完成。
+          </b>
+          <template v-else>
+            <b>夜间停电恢复后必须逐项确认（未恢复前不得标记闭馆完成）：</b>
+            尚有 <b class="bad-text">{{ blackoutNightLeft.length }}</b> 项未确认：{{ blackoutNightLeft.join('、') }}。
+          </template>
+        </template>
+      </div>
+      <RouterLink class="btn amber sm" to="/emergency">进入应急指挥 →</RouterLink>
     </div>
 
     <!-- 历史交接档案条 -->

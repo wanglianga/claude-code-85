@@ -33,8 +33,16 @@ export const seedLibraries: Library[] = [
     closeTime: '21:00',
     seatsTotal: 60,
     status: 'open',
+    community: '湖滨街道 · 中山中路片区',
     streetDutyPhone: '0571-88001100（湖滨街道值班）',
     securityDispatchPhone: '0571-88002200（安保调度中心）',
+    fireContactPhone: '138****9119（湖滨消防救援站值班员）',
+    assemblyPoint: '书房正门中山中路人行道安全集结区（雨棚东侧）',
+    evacuationRoutes: [
+      '阅览区 → 正门（主出口）：沿地面绿色疏散指示灯直行 20 米出正门',
+      '少儿区/书库 → 后门消防通道：沿指示灯至一层后门，推开防火门至室外集合点',
+      '二层 → 封闭楼梯间下行至一层正门集合点（停电时禁止使用电梯）'
+    ],
     securityPosts: ['正门安保岗', '一层值班台', '夜间巡逻岗（馆内）', '安保调度中心（3 公里外）']
   },
   {
@@ -45,8 +53,15 @@ export const seedLibraries: Library[] = [
     closeTime: '20:30',
     seatsTotal: 40,
     status: 'open',
+    community: '小河街道 · 运河公园片区',
     streetDutyPhone: '0571-88003300（小河街道值班）',
     securityDispatchPhone: '0571-88002200（安保调度中心）',
+    fireContactPhone: '138****9120（小河消防救援站值班员）',
+    assemblyPoint: '书房外运河公园广场旗杆下集合点',
+    evacuationRoutes: [
+      '阅览区 → 正门：沿疏散指示灯穿过门厅出正门，至公园广场集合点',
+      '饮水角/多功能间 → 侧门消防通道：推防火门至室外，绕行至广场集合点'
+    ],
     securityPosts: ['正门安保岗', '服务台值班岗', '夜间巡逻岗（馆内）', '安保调度中心（4 公里外）']
   },
   {
@@ -57,8 +72,15 @@ export const seedLibraries: Library[] = [
     closeTime: '22:00',
     seatsTotal: 80,
     status: 'closed',
+    community: '江南街道 · 江南里邻里片区',
     streetDutyPhone: '0571-88004400（江南街道值班）',
     securityDispatchPhone: '0571-88002200（安保调度中心）',
+    fireContactPhone: '138****9121（江南消防救援站值班员）',
+    assemblyPoint: '邻里中心一层中庭南门外广场集合点',
+    evacuationRoutes: [
+      '全馆 → 邻里中心南门：沿一层走廊疏散指示灯至南门集合点',
+      '书库 → 东侧消防通道：推防火门至室外，绕行至南门广场'
+    ],
     securityPosts: ['正门安保岗', '一层值班台', '安保调度中心（2.5 公里外）']
   }
 ]
@@ -68,7 +90,8 @@ export const seedAccounts: Account[] = [
   { username: 'security', password: 'sec123', name: '李安保（值班安保）', role: 'security' },
   { username: 'fix', password: 'fix123', name: '赵工（设备维护）', role: 'maintainer' },
   { username: 'service', password: 'svc123', name: '陈服（读者服务）', role: 'service' },
-  { username: 'volunteer', password: 'vol123', name: '周志愿者', role: 'volunteer', libraryId: 'lib-zhongshan' }
+  { username: 'volunteer', password: 'vol123', name: '周志愿者', role: 'volunteer', libraryId: 'lib-zhongshan' },
+  { username: 'street', password: 'street123', name: '街道值班员（湖滨街道）', role: 'street' }
 ]
 
 export const seedReaders: Reader[] = [
@@ -151,6 +174,12 @@ export const seedDevices: Device[] = [
   dev('d-audio-1', 'lib-zhongshan', 'audio', '异常声音监测', '全楼拾音', 'alarm', { note: '凌晨 02:41 拾取玻璃异响' }),
   dev('d-help-1', 'lib-zhongshan', 'help', '一键求助按钮', '卫生间通道', 'normal'),
   dev('d-ups-1', 'lib-zhongshan', 'ups', '应急照明/UPS', '配电间', 'normal'),
+  dev('d-smoke-1', 'lib-zhongshan', 'smoke', '烟感-阅览区', '阅览区吊顶', 'normal'),
+  dev('d-smoke-2', 'lib-zhongshan', 'smoke', '烟感-书库', '书库通道', 'normal'),
+  dev('d-smoke-3', 'lib-zhongshan', 'smoke', '烟感-少儿区', '少儿区吊顶', 'normal'),
+  dev('d-fresh-1', 'lib-zhongshan', 'freshair', '新风机组', '屋面设备间', 'normal'),
+  dev('d-exit-1', 'lib-zhongshan', 'exitlight', '疏散指示灯-正门通道', '一层主通道', 'normal'),
+  dev('d-exit-2', 'lib-zhongshan', 'exitlight', '疏散指示灯-消防通道', '一层后门', 'normal'),
   // 运河公园书房
   dev('d-gate-3', 'lib-yunhe', 'gate', '入口门禁闸机', '正门', 'normal'),
   dev('d-kiosk-3', 'lib-yunhe', 'selfkiosk', '1号自助借还机', '借阅区', 'normal'),
@@ -163,6 +192,10 @@ export const seedDevices: Device[] = [
   dev('d-audio-2', 'lib-yunhe', 'audio', '异常声音监测', '全楼拾音', 'normal'),
   dev('d-help-2', 'lib-yunhe', 'help', '一键求助按钮', '门厅', 'normal'),
   dev('d-ups-2', 'lib-yunhe', 'ups', 'UPS', '配电间', 'normal'),
+  dev('d-smoke-4', 'lib-yunhe', 'smoke', '烟感-阅览区', '阅览区吊顶', 'normal'),
+  dev('d-fresh-2', 'lib-yunhe', 'freshair', '新风系统', '设备间', 'normal'),
+  dev('d-exit-3', 'lib-yunhe', 'exitlight', '疏散指示灯-正门', '门厅通道', 'normal'),
+  dev('d-printer-2', 'lib-yunhe', 'printer', '自助打印机', '门厅', 'normal', { level: 30 }),
   // 江南里书房（已闭馆，遗留故障）
   dev('d-gate-4', 'lib-jiangnan', 'gate', '入口门禁闸机', '正门', 'fault', { note: '读卡器无响应' }),
   dev('d-kiosk-4', 'lib-jiangnan', 'selfkiosk', '自助借还机', '借阅区', 'normal'),
@@ -174,7 +207,11 @@ export const seedDevices: Device[] = [
   dev('d-audio-3', 'lib-jiangnan', 'audio', '异常声音监测', '全楼拾音', 'normal'),
   dev('d-help-3', 'lib-jiangnan', 'help', '一键求助按钮', '门厅', 'normal'),
   dev('d-ups-3', 'lib-jiangnan', 'ups', 'UPS', '配电间', 'normal'),
-  dev('d-water-3', 'lib-jiangnan', 'water', '直饮饮水机', '饮水角', 'normal')
+  dev('d-water-3', 'lib-jiangnan', 'water', '直饮饮水机', '饮水角', 'normal'),
+  dev('d-smoke-5', 'lib-jiangnan', 'smoke', '烟感-阅览区', '阅览区吊顶', 'normal'),
+  dev('d-fresh-3', 'lib-jiangnan', 'freshair', '新风系统', '设备间', 'off'),
+  dev('d-exit-4', 'lib-jiangnan', 'exitlight', '疏散指示灯-南门通道', '一层走廊', 'normal'),
+  dev('d-printer-3', 'lib-jiangnan', 'printer', '自助打印机', '门厅', 'off', { level: 20 })
 ]
 
 export const seedVisits: Visit[] = [

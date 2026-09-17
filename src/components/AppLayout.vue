@@ -6,15 +6,9 @@ import { useAuthStore, roleNames } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 import { useIncidentStore } from '@/stores/incident'
 import { useBranchStore } from '@/stores/branch'
+import { useBlackoutStore } from '@/stores/blackout'
 import { fmtCountdown, fmtTime } from '@/utils/format'
 import { resetDemoData } from '@/stores/persist'
-import IncidentDrawer from '@/components/IncidentDrawer.vue'
-import HandoverArchiveDrawer from '@/components/HandoverArchiveDrawer.vue'
-import StrandedDrawer from '@/components/StrandedDrawer.vue'
-import FaultDrawer from '@/components/FaultDrawer.vue'
-import FaultCreateDrawer from '@/components/FaultCreateDrawer.vue'
-import { useIncidentViewer } from '@/composables/useIncidentViewer'
-import { useStrandedViewer } from '@/composables/useStrandedViewer'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,9 +16,8 @@ const auth = useAuthStore()
 const system = useSystemStore()
 const incidents = useIncidentStore()
 const branch = useBranchStore()
+const blackout = useBlackoutStore()
 const { now } = storeToRefs(system)
-const incidentViewer = useIncidentViewer()
-const globalIncident = incidentViewer.incident
 
 const nav = computed(() => {
   const role = auth.account?.role
@@ -35,16 +28,18 @@ const nav = computed(() => {
       { to: '/service', ico: '🎫', label: '读者服务台' },
       { to: '/incidents', ico: '🚨', label: '事件协同中心', badge: incidents.openCount(lib) }
     ]},
-    { group: '夜间闭馆', children: [
+    { group: '夜间闭馆 / 应急', children: [
       { to: '/inspection', ico: '🌙', label: '闭馆巡检交接' },
-      { to: '/devices', ico: '📹', label: '设备与无人技防' }
+      { to: '/devices', ico: '📹', label: '设备与无人技防' },
+      { to: '/emergency', ico: '⚡', label: '停电应急联动' },
+      { to: '/street', ico: '🏙️', label: '街道值班总览' }
     ]},
     { group: '馆藏与读者', children: [
       { to: '/books', ico: '📚', label: '馆藏与调拨' },
       { to: '/readers', ico: '⭐', label: '读者信用' },
       { to: '/activities', ico: '👨‍👩‍👧', label: '亲子阅读活动' }
     ]}
-  ] as { group: string; children: { to: string; ico: string; label: string; badge?: number; roles?: string[] }[] }[]
+  ] as { group: string; children: { to: string; ico: string; label: string; badge?: number }[] }[]
   if (role === 'volunteer' || role === 'admin') {
     items.push({ group: '志愿力量', children: [
       { to: '/volunteer', ico: '🧑‍🌾', label: '志愿者巡馆' }
@@ -64,6 +59,7 @@ const activeVisits = computed(() => branch.activeVisits(system.currentLibraryId)
 const carryCount = computed(
   () => incidents.carryOverIncidents.filter((i) => i.libraryId === system.currentLibraryId).length
 )
+const activeCase = computed(() => blackout.activeCase(system.currentLibraryId))
 
 function logout() {
   auth.logout()
@@ -148,23 +144,20 @@ function resetDemo() {
             <RouterLink to="/incidents">前往事件中心处理 →</RouterLink>
           </div>
         </div>
-        <div v-if="system.blackout" class="banner blackout">
+        <div v-if="activeCase" class="banner blackout" :class="{ 'emergency-siren': activeCase.emergencyReasons.length }">
           <span>⚡</span>
-          <div><b>突发停电！</b>应急照明/UPS 已启动，请按停电预案：稳控读者、清点人数、联系供电、上报街道。</div>
-          <RouterLink class="btn amber sm" to="/incidents">查看停电事件</RouterLink>
+          <div>
+            <b>突发停电应急处置中{{ activeCase.emergencyReasons.length ? ' · 🚨 已升级紧急事件（巡检禁止完成）' : '' }}！</b>
+            门禁{{ activeCase.gateFailed ? '失效（安保' + (activeCase.securityArrived ? '已到场' : '出动中') + '）' : '正常' }}
+            · 在馆 {{ activeVisits.length }} 人 · 借还暂存 {{ activeCase.pendingTxns.length }} 笔
+            <template v-if="activeCase.phase === 'power-restored'"> · 来电自检/夜间确认进行中</template>
+            ，请进入应急指挥视图按预案处置。
+          </div>
+          <RouterLink class="btn amber sm" to="/emergency">进入应急指挥 →</RouterLink>
+          <RouterLink class="btn ghost sm" to="/reader" target="_blank">读者端通告</RouterLink>
         </div>
         <slot />
       </main>
     </div>
-
-    <!-- 全局事件抽屉（页面通过 useIncidentViewer 打开） -->
-    <IncidentDrawer :incident="globalIncident" @close="incidentViewer.close()" />
-    <!-- 只读夜间交接档案抽屉 -->
-    <HandoverArchiveDrawer />
-    <!-- 夜间滞留处置抽屉 -->
-    <StrandedDrawer />
-    <!-- 设备故障工单抽屉 -->
-    <FaultDrawer />
-    <FaultCreateDrawer />
   </div>
 </template>

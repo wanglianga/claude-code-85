@@ -8,7 +8,8 @@ export const roleNames: Record<Role, string> = {
   security: '安保',
   maintainer: '设备维护',
   service: '读者服务',
-  volunteer: '志愿者'
+  volunteer: '志愿者',
+  street: '街道值班'
 }
 
 export const useAuthStore = defineStore('auth', () => {

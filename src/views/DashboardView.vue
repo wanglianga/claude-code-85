@@ -6,6 +6,7 @@ import { useSystemStore } from '@/stores/system'
 import { useBranchStore } from '@/stores/branch'
 import { useIncidentStore } from '@/stores/incident'
 import { useInspectionStore } from '@/stores/inspection'
+import { useBlackoutStore } from '@/stores/blackout'
 import { useAuthStore } from '@/stores/auth'
 import { incidentTypeMeta, severityMeta, deviceTypeMeta } from '@/data/meta'
 import { ownerName } from '@/data/sop'
@@ -20,6 +21,7 @@ const system = useSystemStore()
 const branch = useBranchStore()
 const incStore = useIncidentStore()
 const inspStore = useInspectionStore()
+const blackout = useBlackoutStore()
 const auth = useAuthStore()
 const toast = useToast()
 const { now } = storeToRefs(system)
@@ -34,6 +36,7 @@ function openArchive(id: string) {
 }
 
 const lib = computed(() => system.currentLibrary)
+const activeBlackout = computed(() => blackout.activeCase(lib.value.id))
 const visits = computed(() => branch.activeVisits(lib.value.id))
 const childVisits = computed(() => visits.value.filter((v) => v.isChild))
 const seatsUsed = computed(() => visits.value.length)
@@ -78,31 +81,14 @@ function visitAtSeat(seat: string) {
 }
 
 function triggerBlackout() {
-  if (system.blackout) {
-    system.restorePower()
-    toast.ok('供电已恢复，设备陆续重启')
+  // 已在应急处置中：直接进入应急指挥视图；复盘后重新模拟需先“恢复演示数据”
+  if (blackout.activeCase(lib.value.id)) {
+    router.push('/emergency')
     return
   }
-  system.triggerBlackout()
-  const inc = incStore.create({
-    libraryId: lib.value.id,
-    type: 'blackout',
-    severity: 'urgent',
-    title: '突发停电应急处置',
-    detail:
-      '书房突发市电中断，应急照明/UPS 自动投入。需立即：1) 广播安抚并清点在馆人数；2) 检查电梯困人等次生风险；3) 联系供电与物业；4) 超过 30 分钟未恢复则上报街道值班并视情提前闭馆。',
-    at: system.now,
-    night: system.isNight,
-    owner: 'security',
-    blackout: true
-  })
-  // 停电导致部分设备离线
-  for (const d of devices.value) {
-    if (['selfkiosk', 'printer', 'camera', 'ac', 'light'].includes(d.type) && d.status !== 'fault') {
-      branch.setDeviceStatus(d.id, d.type === 'camera' ? 'offline' : 'off')
-    }
-  }
-  incidentViewer.show(inc)
+  blackout.beginBlackout(lib.value.id, system.now, { gateFailed: true })
+  toast.bad('⚡ 突发停电：已切换应急视图，受影响范围已生成、安保已通知到场')
+  router.push('/emergency')
 }
 
 function jumpClose() {
@@ -214,8 +200,8 @@ const nightDevices = computed(() =>
         <button class="btn ghost sm" @click="jumpNight">🌃 进入夜间无人时段</button>
         <button class="btn ghost sm" :disabled="!system.simulated" @click="resume">恢复真实时间</button>
         <div class="spacer"></div>
-        <button class="btn" :class="system.blackout ? '' : 'danger'" @click="triggerBlackout">
-          {{ system.blackout ? '🔌 恢复供电' : '⚡ 模拟突发停电' }}
+        <button class="btn" :class="activeBlackout ? 'amber' : 'danger'" @click="triggerBlackout">
+          {{ activeBlackout ? '⚡ 进入停电应急指挥' : '⚡ 模拟突发停电' }}
         </button>
       </div>
     </div>

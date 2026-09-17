@@ -11,10 +11,14 @@ const router = createRouter({
     { path: '/incidents', name: 'incidents', component: () => import('@/views/IncidentsView.vue'), meta: { title: '事件协同中心' } },
     { path: '/inspection', name: 'inspection', component: () => import('@/views/InspectionView.vue'), meta: { title: '夜间闭馆巡检' } },
     { path: '/devices', name: 'devices', component: () => import('@/views/DevicesView.vue'), meta: { title: '设备与技防' } },
+    { path: '/emergency', name: 'emergency', component: () => import('@/views/EmergencyView.vue'), meta: { title: '停电应急联动' } },
+    { path: '/street', name: 'street', component: () => import('@/views/StreetView.vue'), meta: { title: '街道值班应急总览' } },
     { path: '/books', name: 'books', component: () => import('@/views/BooksView.vue'), meta: { title: '馆藏与调拨' } },
     { path: '/readers', name: 'readers', component: () => import('@/views/ReadersView.vue'), meta: { title: '读者信用' } },
     { path: '/activities', name: 'activities', component: () => import('@/views/ActivitiesView.vue'), meta: { title: '亲子阅读活动' } },
-    { path: '/volunteer', name: 'volunteer', component: () => import('@/views/VolunteerView.vue'), meta: { title: '志愿者巡馆', roles: ['volunteer', 'admin'] } }
+    { path: '/volunteer', name: 'volunteer', component: () => import('@/views/VolunteerView.vue'), meta: { title: '志愿者巡馆', roles: ['volunteer', 'admin'] } },
+    // 读者端应急通告屏（无需登录，停电时对读者展示疏散路线/集合点/停止服务）
+    { path: '/reader', name: 'reader', component: () => import('@/views/ReaderView.vue'), meta: { public: true, title: '读者应急通告' } }
   ]
 })
 
@@ -22,6 +26,10 @@ router.beforeEach((to) => {
   const auth = useAuthStore()
   if (!to.meta.public && !auth.account) return { name: 'login' }
   if (to.name === 'login' && auth.account) return { name: 'dashboard' }
+  // 街道值班账号只进入街道应急总览
+  if (auth.account?.role === 'street' && to.name !== 'street' && to.name !== 'reader') {
+    return { name: 'street' }
+  }
   return true
 })
 

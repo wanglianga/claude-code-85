@@ -32,10 +32,10 @@ const devices = computed(() =>
 )
 
 const techDefense = computed(() =>
-  devices.value.filter((d) => ['gate', 'camera', 'fire', 'audio', 'help', 'ups'].includes(d.type))
+  devices.value.filter((d) => ['gate', 'camera', 'fire', 'smoke', 'audio', 'help', 'ups', 'exitlight'].includes(d.type))
 )
 const selfService = computed(() =>
-  devices.value.filter((d) => ['selfkiosk', 'printer', 'water', 'returnbox', 'ac', 'light'].includes(d.type))
+  devices.value.filter((d) => ['selfkiosk', 'printer', 'water', 'returnbox', 'ac', 'freshair', 'light'].includes(d.type))
 )
 
 const abnormalCount = computed(() =>

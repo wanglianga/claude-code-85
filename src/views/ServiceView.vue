@@ -11,6 +11,7 @@ import type { EntryMethod, Reader, ServiceKind } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { useFaultsStore } from '@/stores/faults'
 import { useFaultViewer } from '@/composables/useFaultViewer'
+import { useBlackoutStore } from '@/stores/blackout'
 
 const system = useSystemStore()
 const branch = useBranchStore()
@@ -19,10 +20,12 @@ const auth = useAuthStore()
 const toast = useToast()
 const faults = useFaultsStore()
 const faultViewer = useFaultViewer()
+const blackout = useBlackoutStore()
 const { now } = storeToRefs(system)
 
 const readOnly = computed(() => auth.account?.role === 'volunteer')
 const activeManualFaults = computed(() => faults.activeManualReports(system.currentLibraryId))
+const activeBlackout = computed(() => blackout.activeCase(system.currentLibraryId))
 
 // ---------------- 入馆登记 ----------------
 const method = ref<EntryMethod>('idcard')
@@ -129,14 +132,19 @@ function recordService() {
     return
   }
   const lib = system.currentLibrary
+  // 停电中：自助设备离线/停止，借还转应急暂存，打印/饮水停止服务（读者端已同步）
+  if (activeBlackout.value && activeBlackout.value.phase === 'active') {
+    if (svcKind.value === 'borrow' || svcKind.value === 'return') {
+      toast.bad('停电中自助借还机离线：请到「停电应急联动」做借还暂存（记录操作时间+设备编号，来电补录，不计逾期）')
+      return
+    }
+    toast.bad('停电中打印机/饮水机已停止服务，停止服务通告已同步读者端')
+    return
+  }
   if (svcKind.value === 'borrow') {
     const book = booksHere.value.find((b) => b.id === svcBookId.value)
     if (!book || book.status !== 'on-shelf') {
       toast.bad('请选择一本在架可借图书')
-      return
-    }
-    if (system.blackout) {
-      toast.bad('停电中，自助借还机不可用，请转人工登记')
       return
     }
     branch.borrowBook(book, r, now.value)

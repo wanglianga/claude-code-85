@@ -15,6 +15,7 @@ import { useBranchStore } from '@/stores/branch'
 import { useSystemStore } from '@/stores/system'
 import { useStrandedStore } from '@/stores/stranded'
 import { useFaultsStore } from '@/stores/faults'
+import { useBlackoutStore, nightConfirmKeys } from '@/stores/blackout'
 import { fmtDate } from '@/utils/format'
 
 function clone<T>(v: T): T {
@@ -186,6 +187,29 @@ export const useInspectionStore = defineStore('inspection', () => {
       reasons.push(
         `仍有 ${stranded.length} 名夜间滞留读者未完成处置（须安保到场、管理员劝离/延时/报警决策、记录最终离馆时间；未成年人须先通知监护人）`
       )
+    }
+    // 突发停电联动：停电处置未结束（或夜间停电六项未逐项确认）前，巡检状态不允许完成
+    const blockingBlackout = useBlackoutStore().blocksInspection(insp.libraryId)
+    if (blockingBlackout) {
+      if (blockingBlackout.phase === 'active') {
+        reasons.push('突发停电应急处置进行中：供电未恢复、受影响范围/人员清点未完成，巡检状态不允许完成')
+      } else {
+        if (blockingBlackout.emergencyReasons.length && !blockingBlackout.emergencyCleared) {
+          reasons.push('停电紧急事件（被困/消防通道被占/烟感离线/应急灯不亮）险情尚未排除，巡检状态不允许完成')
+        }
+        const pendingTest = useBlackoutStore().pendingSelfTestCount(blockingBlackout)
+        if (pendingTest > 0) {
+          reasons.push(`停电来电后仍有 ${pendingTest} 台设备未完成自检（图书消磁、还书箱、自助机等），故障设备需进入跨日交接`)
+        }
+        const pendingTxn = blockingBlackout.pendingTxns.filter((t) => !t.backfilled).length
+        if (pendingTxn > 0) {
+          reasons.push(`停电期间 ${pendingTxn} 笔借还暂存尚未按操作时间与设备编号补录，不得闭馆`)
+        }
+        const left = nightConfirmKeys.filter((k) => !blockingBlackout.nightConfirms[k]).length
+        if (left) {
+          reasons.push(`夜间停电恢复后仍有 ${left} 项未由管理员/安保逐项确认（人员清场、门窗、消防通道、应急照明、门禁恢复、摄像头回传），未恢复前不得标记闭馆完成`)
+        }
+      }
     }
     return reasons
   }
