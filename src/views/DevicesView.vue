@@ -23,7 +23,7 @@ const { now } = storeToRefs(system)
 const incidentViewer = useIncidentViewer()
 const faultViewer = useFaultViewer()
 
-const readOnly = computed(() => auth.account?.role === 'volunteer' || auth.account?.role === 'service')
+const readOnly = computed(() => auth.account?.role === 'volunteer' || auth.account?.role === 'service' || auth.account?.role === 'street')
 const isMaintainer = computed(() => auth.account?.role === 'maintainer' || auth.account?.role === 'admin')
 
 const filterType = ref<string>('')
@@ -32,10 +32,10 @@ const devices = computed(() =>
 )
 
 const techDefense = computed(() =>
-  devices.value.filter((d) => ['gate', 'camera', 'fire', 'audio', 'help', 'ups'].includes(d.type))
+  devices.value.filter((d) => ['gate', 'camera', 'fire', 'smoke', 'elight', 'exitsign', 'audio', 'help', 'ups'].includes(d.type))
 )
 const selfService = computed(() =>
-  devices.value.filter((d) => ['selfkiosk', 'printer', 'water', 'returnbox', 'ac', 'light'].includes(d.type))
+  devices.value.filter((d) => ['selfkiosk', 'printer', 'water', 'returnbox', 'ac', 'vent', 'light'].includes(d.type))
 )
 
 const abnormalCount = computed(() =>
@@ -195,7 +195,7 @@ const faultStatusLabel: Record<string, string> = {
                   <button v-if="faults.faultOfDevice(d.id)" class="mini-btn" style="margin-left:4px;border-color:#e6aab3;color:var(--bad)" @click.stop="openFault(faults.faultOfDevice(d.id)!.id)">
                     工单 {{ faults.faultOfDevice(d.id)!.carriedToDate ? '·跨日' : '' }}
                   </button>
-                  <button v-else-if="isMaintainer && d.status !== 'normal' && d.status !== 'online'" class="mini-btn" style="margin-left:4px" @click="changeStatus(d, d.type === 'camera' ? 'online' : 'normal')">修复</button>
+                  <button v-else-if="isMaintainer && d.status !== 'normal' && d.status !== 'online'" class="mini-btn" style="margin-left:4px" @click="changeStatus(d, ['camera','smoke'].includes(d.type) ? 'online' : 'normal')">修复</button>
                 </td>
               </tr>
             </tbody>

@@ -20,9 +20,6 @@ export const useSystemStore = defineStore('system', () => {
   const simulated = ref(false)
   /** 演示快进倍率（如 60 = 每秒前进 1 分钟） */
   const scale = ref(1)
-  /** 突发停电状态 */
-  const blackout = ref(false)
-  const blackoutAt = ref<number | undefined>(undefined)
 
   let timer: number | undefined
   function startClock() {
@@ -79,15 +76,6 @@ export const useSystemStore = defineStore('system', () => {
     now.value = Date.now()
   }
 
-  function triggerBlackout() {
-    blackout.value = true
-    blackoutAt.value = now.value
-  }
-  function restorePower() {
-    blackout.value = false
-    blackoutAt.value = undefined
-  }
-
   return {
     libraries,
     currentLibraryId,
@@ -95,8 +83,6 @@ export const useSystemStore = defineStore('system', () => {
     now,
     simulated,
     scale,
-    blackout,
-    blackoutAt,
     closeTs,
     openTs,
     msToClose,
@@ -109,8 +95,6 @@ export const useSystemStore = defineStore('system', () => {
     jumpBeforeClose,
     jumpToAfterClose,
     jumpToTimestamp,
-    resumeRealTime,
-    triggerBlackout,
-    restorePower
+    resumeRealTime
   }
 })

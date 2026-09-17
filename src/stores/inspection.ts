@@ -15,6 +15,7 @@ import { useBranchStore } from '@/stores/branch'
 import { useSystemStore } from '@/stores/system'
 import { useStrandedStore } from '@/stores/stranded'
 import { useFaultsStore } from '@/stores/faults'
+import { useBlackoutStore } from '@/stores/blackout'
 import { fmtDate } from '@/utils/format'
 
 function clone<T>(v: T): T {
@@ -187,6 +188,15 @@ export const useInspectionStore = defineStore('inspection', () => {
         `仍有 ${stranded.length} 名夜间滞留读者未完成处置（须安保到场、管理员劝离/延时/报警决策、记录最终离馆时间；未成年人须先通知监护人）`
       )
     }
+    // 突发停电应急联动：停电处置未闭环（含紧急事件/夜间恢复六项/自检/补录）前不允许完成巡检
+    const blackoutStore = useBlackoutStore()
+    const activeBlackout = blackoutStore.activeOf(insp.libraryId)
+    if (activeBlackout) {
+      const boReasons = blackoutStore.blockedCloseReasons(activeBlackout)
+      if (boReasons.length) {
+        reasons.push(`突发停电处置未闭环，巡检状态不允许完成：${boReasons.join('；')}`)
+      }
+    }
     return reasons
   }
 
@@ -213,6 +223,12 @@ export const useInspectionStore = defineStore('inspection', () => {
     const carriedFaultIds = faultsStore.openReports
       .filter((r) => r.libraryId === libraryId)
       .map((r) => r.id)
+    const blackoutStore = useBlackoutStore()
+    // 本日已发生的停电应急处置（含已闭环复盘）随档案留存，未闭环的上面已阻止完成交接
+    const blackoutEventIds = blackoutStore
+      .byLibrary(libraryId)
+      .filter((e) => e.startedAt <= at)
+      .map((e) => e.id)
     const snapshot: HandoverSnapshot = {
       finishedAt: at,
       items: clone(insp.items),
@@ -222,7 +238,8 @@ export const useInspectionStore = defineStore('inspection', () => {
       conclusion: conclusion || '人员、图书、设备、公共安全四方交接完成，书房转入夜间无人值守模式。',
       carryIncidentIds: carryIds,
       strandedVisitIds,
-      carriedFaultIds
+      carriedFaultIds,
+      blackoutEventIds
     }
     insp.finishedAt = at
     insp.archive = snapshot
@@ -285,7 +302,9 @@ export const useInspectionStore = defineStore('inspection', () => {
       else branch.setDeviceStatus(d.id, 'normal', '次日开馆恢复')
     }
 
-    if (lib) system.setLibraryStatus(libraryId, 'open')
+    // 仍有未闭环停电应急处置时，书房维持停电状态，不因开馆而转开放
+    const activeBlackout = useBlackoutStore().activeOf(libraryId)
+    if (lib && !activeBlackout) system.setLibraryStatus(libraryId, 'open')
 
     // 演示时钟跳到次日开馆时间（若早于当前模拟时间则不回拨）
     const openHhmm = lib?.openTime ?? '08:30'

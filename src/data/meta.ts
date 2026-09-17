@@ -45,7 +45,11 @@ export const deviceTypeMeta: Record<DeviceType, string> = {
   returnbox: '还书箱',
   audio: '异常声音监测',
   help: '求助按钮',
-  ups: '应急电源'
+  ups: '应急电源',
+  elight: '应急照明灯',
+  exitsign: '疏散指示灯',
+  smoke: '烟感探测器',
+  vent: '新风系统'
 }
 
 export const deviceStatusMeta: Record<DeviceStatus, { label: string; cls: string }> = {

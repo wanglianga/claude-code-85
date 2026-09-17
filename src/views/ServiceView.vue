@@ -11,6 +11,7 @@ import type { EntryMethod, Reader, ServiceKind } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { useFaultsStore } from '@/stores/faults'
 import { useFaultViewer } from '@/composables/useFaultViewer'
+import { useBlackoutStore } from '@/stores/blackout'
 
 const system = useSystemStore()
 const branch = useBranchStore()
@@ -18,10 +19,11 @@ const incStore = useIncidentStore()
 const auth = useAuthStore()
 const toast = useToast()
 const faults = useFaultsStore()
+const blackoutStore = useBlackoutStore()
 const faultViewer = useFaultViewer()
 const { now } = storeToRefs(system)
 
-const readOnly = computed(() => auth.account?.role === 'volunteer')
+const readOnly = computed(() => auth.account?.role === 'volunteer' || auth.account?.role === 'street')
 const activeManualFaults = computed(() => faults.activeManualReports(system.currentLibraryId))
 
 // ---------------- 入馆登记 ----------------
@@ -129,14 +131,15 @@ function recordService() {
     return
   }
   const lib = system.currentLibrary
+  const isBlackout = !!blackoutStore.activeOf(lib.id)
   if (svcKind.value === 'borrow') {
     const book = booksHere.value.find((b) => b.id === svcBookId.value)
     if (!book || book.status !== 'on-shelf') {
       toast.bad('请选择一本在架可借图书')
       return
     }
-    if (system.blackout) {
-      toast.bad('停电中，自助借还机不可用，请转人工登记')
+    if (isBlackout) {
+      toast.bad('停电中，自助借还机不可用：请到「停电应急联动」页做人工暂存，来电按操作时间补录')
       return
     }
     branch.borrowBook(book, r, now.value)
@@ -178,12 +181,24 @@ function recordService() {
     }
     demagForceFail.value = false
   } else if (svcKind.value === 'print') {
+    if (isBlackout) {
+      toast.bad('停电中打印机停止服务，已在读者端公告；恢复后可补打')
+      return
+    }
     branch.logUsage(lib.id, r, 'print', `自助打印 ${printPages.value} 页（黑白）`, now.value)
     toast.ok(`已记录打印 ${printPages.value} 页`)
   } else if (svcKind.value === 'water') {
+    if (isBlackout) {
+      toast.bad('停电中饮水机停止服务（已同步读者端公告），请勿引导读者接水')
+      return
+    }
     branch.logUsage(lib.id, r, 'water', `饮水机接水 ${waterMl.value}ml`, now.value)
     toast.ok(`已记录饮水 ${waterMl.value}ml`)
   } else {
+    if (isBlackout) {
+      toast.bad('停电中自助设备不可用，请引导读者至安全区域等候')
+      return
+    }
     branch.logUsage(lib.id, r, 'kiosk', '使用自助设备（检索/续借/座位预约）', now.value)
     toast.ok('自助设备使用已记录')
   }

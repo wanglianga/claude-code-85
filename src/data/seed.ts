@@ -29,37 +29,67 @@ export const seedLibraries: Library[] = [
     id: 'lib-zhongshan',
     name: '中山中路城市书房',
     address: '中山中路 88 号',
+    district: '湖滨街道',
+    powerCommunity: '湖滨片区（中山线 10kV）',
     openTime: '08:30',
     closeTime: '21:00',
     seatsTotal: 60,
     status: 'open',
     streetDutyPhone: '0571-88001100（湖滨街道值班）',
     securityDispatchPhone: '0571-88002200（安保调度中心）',
-    securityPosts: ['正门安保岗', '一层值班台', '夜间巡逻岗（馆内）', '安保调度中心（3 公里外）']
+    fireContactPhone: '119 / 0571-88009119（湖滨消防救援站值班）',
+    securityPosts: ['正门安保岗', '一层值班台', '夜间巡逻岗（馆内）', '安保调度中心（3 公里外）'],
+    mechanicalKeyLocation: '一层值班台钥匙柜 B-02（红色应急钥匙盒，铅封）',
+    mechanicalKeyHolder: '值班安保 李安保（备：管理员王管）',
+    assemblyPoint: '正门东侧中山中路人行道安全岛（距正门约 60 米）',
+    evacuationRoutes: [
+      { zone: '一层阅览区 A/B 区', route: '座位区 → 主通道向东 → 正门 → 中山中路安全岛集合点' },
+      { zone: '少儿亲子区', route: '亲子区 → 就近安全出口（东门）→ 沿建筑东侧 → 正门安全岛集合点' },
+      { zone: '书库/卫生间通道', route: '通道向北 → 消防通道（后门）→ 后院集合后由安保引导绕行至正门安全岛' }
+    ]
   },
   {
     id: 'lib-yunhe',
     name: '运河公园城市书房',
     address: '运河公园北侧 2 号',
+    district: '小河街道',
+    powerCommunity: '运河公园片区（公园线 10kV）',
     openTime: '09:00',
     closeTime: '20:30',
     seatsTotal: 40,
     status: 'open',
     streetDutyPhone: '0571-88003300（小河街道值班）',
     securityDispatchPhone: '0571-88002200（安保调度中心）',
-    securityPosts: ['正门安保岗', '服务台值班岗', '夜间巡逻岗（馆内）', '安保调度中心（4 公里外）']
+    fireContactPhone: '119 / 0571-88003119（小河消防救援站值班）',
+    securityPosts: ['正门安保岗', '服务台值班岗', '夜间巡逻岗（馆内）', '安保调度中心（4 公里外）'],
+    mechanicalKeyLocation: '服务台下方应急钥匙箱（密码 119#）',
+    mechanicalKeyHolder: '值班安保（备：当班管理员）',
+    assemblyPoint: '运河公园北门停车场空旷区（距正门约 80 米）',
+    evacuationRoutes: [
+      { zone: '阅览区 C/D 区', route: '座位区 → 主通道 → 正门 → 公园北门停车场集合点' },
+      { zone: '饮水角/多功能间', route: '就近侧门 → 园路向北 → 北门停车场集合点' }
+    ]
   },
   {
     id: 'lib-jiangnan',
     name: '江南里城市书房',
     address: '江南里邻里中心 1 层',
+    district: '江南街道',
+    powerCommunity: '江南里邻里中心片区（邻里线 10kV）',
     openTime: '08:00',
     closeTime: '22:00',
     seatsTotal: 80,
     status: 'closed',
     streetDutyPhone: '0571-88004400（江南街道值班）',
     securityDispatchPhone: '0571-88002200（安保调度中心）',
-    securityPosts: ['正门安保岗', '一层值班台', '安保调度中心（2.5 公里外）']
+    fireContactPhone: '119 / 0571-88004119（江南消防救援站值班）',
+    securityPosts: ['正门安保岗', '一层值班台', '安保调度中心（2.5 公里外）'],
+    mechanicalKeyLocation: '邻里中心消控室应急钥匙柜',
+    mechanicalKeyHolder: '夜间值班安保（消控室 24h）',
+    assemblyPoint: '邻里中心南广场（距书房正门约 50 米）',
+    evacuationRoutes: [
+      { zone: '全馆', route: '阅览区 → 邻里中心内街 → 南门 → 南广场集合点' }
+    ]
   }
 ]
 
@@ -68,7 +98,8 @@ export const seedAccounts: Account[] = [
   { username: 'security', password: 'sec123', name: '李安保（值班安保）', role: 'security' },
   { username: 'fix', password: 'fix123', name: '赵工（设备维护）', role: 'maintainer' },
   { username: 'service', password: 'svc123', name: '陈服（读者服务）', role: 'service' },
-  { username: 'volunteer', password: 'vol123', name: '周志愿者', role: 'volunteer', libraryId: 'lib-zhongshan' }
+  { username: 'volunteer', password: 'vol123', name: '周志愿者', role: 'volunteer', libraryId: 'lib-zhongshan' },
+  { username: 'street', password: 'street123', name: '沈值班（湖滨街道值班室）', role: 'street' }
 ]
 
 export const seedReaders: Reader[] = [
@@ -151,6 +182,12 @@ export const seedDevices: Device[] = [
   dev('d-audio-1', 'lib-zhongshan', 'audio', '异常声音监测', '全楼拾音', 'alarm', { note: '凌晨 02:41 拾取玻璃异响' }),
   dev('d-help-1', 'lib-zhongshan', 'help', '一键求助按钮', '卫生间通道', 'normal'),
   dev('d-ups-1', 'lib-zhongshan', 'ups', '应急照明/UPS', '配电间', 'normal'),
+  dev('d-elight-1', 'lib-zhongshan', 'elight', '应急照明灯组-主通道', '主通道/出入口', 'normal', { note: '停电自动点亮，续航≥90 分钟' }),
+  dev('d-elight-2', 'lib-zhongshan', 'elight', '应急照明灯组-书库', '书库通道', 'normal'),
+  dev('d-exit-1', 'lib-zhongshan', 'exitsign', '疏散指示标志灯', '全馆疏散路径', 'normal', { level: 100 }),
+  dev('d-smoke-1', 'lib-zhongshan', 'smoke', '烟感-阅览区', '阅览区吊顶', 'online'),
+  dev('d-smoke-2', 'lib-zhongshan', 'smoke', '烟感-书库/配电间', '书库、配电间', 'online'),
+  dev('d-vent-1', 'lib-zhongshan', 'vent', '新风系统', '全楼', 'normal'),
   // 运河公园书房
   dev('d-gate-3', 'lib-yunhe', 'gate', '入口门禁闸机', '正门', 'normal'),
   dev('d-kiosk-3', 'lib-yunhe', 'selfkiosk', '1号自助借还机', '借阅区', 'normal'),
@@ -163,6 +200,10 @@ export const seedDevices: Device[] = [
   dev('d-audio-2', 'lib-yunhe', 'audio', '异常声音监测', '全楼拾音', 'normal'),
   dev('d-help-2', 'lib-yunhe', 'help', '一键求助按钮', '门厅', 'normal'),
   dev('d-ups-2', 'lib-yunhe', 'ups', 'UPS', '配电间', 'normal'),
+  dev('d-elight-3', 'lib-yunhe', 'elight', '应急照明灯组', '主通道/出口', 'normal'),
+  dev('d-exit-2', 'lib-yunhe', 'exitsign', '疏散指示标志灯', '疏散路径', 'normal', { level: 100 }),
+  dev('d-smoke-3', 'lib-yunhe', 'smoke', '烟感探测器', '阅览区/配电间', 'online'),
+  dev('d-vent-2', 'lib-yunhe', 'vent', '新风系统', '全馆', 'normal'),
   // 江南里书房（已闭馆，遗留故障）
   dev('d-gate-4', 'lib-jiangnan', 'gate', '入口门禁闸机', '正门', 'fault', { note: '读卡器无响应' }),
   dev('d-kiosk-4', 'lib-jiangnan', 'selfkiosk', '自助借还机', '借阅区', 'normal'),

@@ -8,9 +8,10 @@ import { useSystemStore } from '@/stores/system'
 import { useIncidentStore } from '@/stores/incident'
 import { useBranchStore } from '@/stores/branch'
 import { useFaultsStore } from '@/stores/faults'
+import { useBlackoutStore } from '@/stores/blackout'
 import { incidentTypeMeta, severityMeta, deviceTypeMeta } from '@/data/meta'
-import { fmtDateTime, fmtTime } from '@/utils/format'
-import type { CheckState, DeviceFaultReport, Visit } from '@/types'
+import { fmtDateTime, fmtDuration, fmtTime } from '@/utils/format'
+import type { BlackoutEvent, CheckState, DeviceFaultReport, Visit } from '@/types'
 
 const archiveViewer = useArchiveViewer()
 const incidentViewer = useIncidentViewer()
@@ -20,6 +21,7 @@ const system = useSystemStore()
 const incStore = useIncidentStore()
 const branch = useBranchStore()
 const faults = useFaultsStore()
+const blackout = useBlackoutStore()
 
 const archive = computed(() => archiveViewer.archive.value)
 
@@ -70,6 +72,12 @@ function openFault(id: string) {
   archiveViewer.close()
   faultViewer.open(id)
 }
+
+/** 本营业日发生的停电应急处置单（随档案留存，未闭环的无法完成交接） */
+const blackoutEvents = computed<BlackoutEvent[]>(() => {
+  const ids = archive.value?.archive?.blackoutEventIds ?? []
+  return ids.map((id) => blackout.byId(id)).filter((e): e is BlackoutEvent => !!e)
+})
 
 const sigRows = computed(() => [
   { key: 'people' as const, label: '人员交接' },
@@ -234,6 +242,49 @@ function sigName(key: 'people' | 'books' | 'devices' | 'safety'): string {
                   <td class="small">{{ f.affectedReaderCount }} 人次</td>
                   <td class="small">{{ f.maintainerName }}<div class="muted">{{ f.maintainerPhone }}</div></td>
                   <td class="right"><button class="mini-btn" @click.stop="openFault(f.id)">工单</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 停电应急联动处置单 -->
+        <div class="card" v-if="blackoutEvents.length">
+          <div class="card-hd">
+            <h3>⚡ 突发停电应急处置（{{ blackoutEvents.length }}）</h3>
+            <span class="sub">受影响范围、门禁消防联动、紧急升级、暂存补录、夜间恢复确认与复盘随档案留存</span>
+          </div>
+          <div class="card-bd flush">
+            <table class="tbl">
+              <thead><tr><th>处置单</th><th>停电小区/时长</th><th>门禁/紧急事件</th><th>借还暂存</th><th>夜间恢复/自检</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr v-for="e in blackoutEvents" :key="e.id">
+                  <td class="small"><b>{{ e.no }}</b><div class="muted">{{ fmtDateTime(e.startedAt) }} {{ fmtTime(e.startedAt) }}</div></td>
+                  <td class="small">{{ e.community }}<div class="muted">
+                    {{ e.restoredAt ? fmtDuration(e.startedAt, e.restoredAt) : '未恢复' }}
+                  </div></td>
+                  <td class="small">
+                    门禁：<b :class="e.gateFailed ? 'bad-text' : 'good-text'">{{ e.gateFailed ? '失效' : 'UPS 维持' }}</b>
+                    <span v-if="e.gateFallback !== 'none'" class="tag st-info" style="margin-left:4px">{{ e.gateFallback === 'mechanical-key' ? '机械钥匙' : '临时开门' }}</span>
+                    <div class="mt8">
+                      <span v-if="e.escalations.length" class="tag" :class="e.escalations.some(x => !x.resolved) ? 'sev-urgent' : 'st-ok'">
+                        紧急事件 {{ e.escalations.filter(x => x.resolved).length }}/{{ e.escalations.length }} 解除
+                      </span>
+                      <span v-else class="muted">无紧急事件</span>
+                    </div>
+                  </td>
+                  <td class="small">
+                    共 {{ e.pendingLoans.length }} 笔<div class="muted">已补录 {{ e.pendingLoans.filter(l => l.status === 'backfilled').length }}</div>
+                  </td>
+                  <td class="small">
+                    <template v-if="e.night">{{ e.nightItems.filter(i => i.state === 'ok').length }}/{{ e.nightItems.length }} 项确认</template>
+                    <span v-else class="muted">白天停电</span>
+                    <div class="muted">自检失败工单 {{ e.carriedFaultIds.length }} 起</div>
+                  </td>
+                  <td>
+                    <span class="tag" :class="e.phase === 'closed' ? 'st-ok' : 'sev-urgent'">{{ e.phase === 'closed' ? '已复盘闭环' : '处置未闭环' }}</span>
+                    <button v-if="e.incidentId" class="mini-btn mt8" style="display:block" @click.stop="e.incidentId && openIncident(e.incidentId)">停电事件</button>
+                  </td>
                 </tr>
               </tbody>
             </table>

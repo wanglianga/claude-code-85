@@ -118,7 +118,7 @@ export const useIncidentStore = defineStore('incident', () => {
   function act(
     incidentId: string,
     payload: {
-      role: Role
+      role: Role | 'system' | 'street'
       actor: string
       type: IncidentAction['type']
       text: string
@@ -149,7 +149,7 @@ export const useIncidentStore = defineStore('incident', () => {
     incidentId: string,
     target: 'security-dispatch' | 'street',
     actor: string,
-    role: Role,
+    role: Role | 'street',
     at: number
   ) {
     const inc = incidents.value.find((i) => i.id === incidentId)

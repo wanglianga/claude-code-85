@@ -12,6 +12,7 @@ import { useIncidentViewer } from '@/composables/useIncidentViewer'
 import { useArchiveViewer } from '@/composables/useArchiveViewer'
 import { useStrandedViewer } from '@/composables/useStrandedViewer'
 import { useStrandedStore } from '@/stores/stranded'
+import { useBlackoutStore } from '@/stores/blackout'
 import { useToast } from '@/composables/useToast'
 import type { CheckItem, CheckState, Incident, Visit } from '@/types'
 
@@ -26,6 +27,7 @@ const incidentViewer = useIncidentViewer()
 const archiveViewer = useArchiveViewer()
 const strandedViewer = useStrandedViewer()
 const strandedStore = useStrandedStore()
+const blackoutStore = useBlackoutStore()
 
 const lib = computed(() => system.currentLibrary)
 /** 当前营业日巡检单（次日开馆后为新日期的新单，绝不是旧单“进行中”） */
@@ -224,9 +226,11 @@ function openItemIncident(item: CheckItem) {
       </div>
     </div>
 
-    <div v-if="system.blackout" class="banner danger">
+    <div v-if="blackoutStore.activeOf(lib.id)" class="banner danger">
       <span>⚡</span>
-      <div><b>停电期间巡检：</b>先完成人员疏散与清点（UPS 仅保障应急照明/技防），供电恢复后补检设备项；必要时提前闭馆并上报街道。</div>
+      <div><b>停电期间巡检受限：</b>先在应急指挥视图完成人员疏散清点与影响范围核验；<b v-if="blackoutStore.activeOf(lib.id)!.escalations.some(e => !e.resolved)" class="pulse-dot"></b>紧急事件未解除、夜间恢复六项未确认、来电自检与借还补录未完成前，巡检状态不允许完成。
+        <RouterLink class="btn amber sm" style="margin-left:8px" to="/emergency">进入应急指挥 →</RouterLink>
+      </div>
     </div>
 
     <!-- 历史交接档案条 -->

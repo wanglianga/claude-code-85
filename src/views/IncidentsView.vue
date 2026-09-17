@@ -125,7 +125,7 @@ const statusCls: Record<Incident['status'], string> = {
           <option v-for="(m, k) in incidentTypeMeta" :key="k" :value="k">{{ m.icon }} {{ m.label }}</option>
         </select>
         <div class="spacer"></div>
-        <button class="btn amber sm" @click="showCreate = true" :disabled="auth.account?.role === 'volunteer'">＋ 人工上报事件</button>
+        <button class="btn amber sm" @click="showCreate = true" :disabled="auth.account?.role === 'volunteer' || auth.account?.role === 'street'">＋ 人工上报事件</button>
       </div>
     </div>
 

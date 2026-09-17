@@ -9,6 +9,7 @@ export type Role =
   | 'maintainer' // 设备维护
   | 'service' // 读者服务
   | 'volunteer' // 志愿者（巡馆）
+  | 'street' // 街道值班（跨书房应急联动/复盘监督）
 
 export interface Account {
   username: string
@@ -23,16 +24,27 @@ export interface Library {
   id: string
   name: string
   address: string
+  /** 所属街道/供电小区（街道值班视角的停电范围归集维度） */
+  district: string
+  powerCommunity: string
   /** 开馆/闭馆时间 HH:mm */
   openTime: string
   closeTime: string
   seatsTotal: number
   status: 'open' | 'closed' | 'closing' | 'blackout'
-  /** 街道值班电话、安保调度电话 */
+  /** 街道值班电话、安保调度电话、消防联系人电话 */
   streetDutyPhone: string
   securityDispatchPhone: string
+  fireContactPhone: string
   /** 可派驻安保的值班位置 */
   securityPosts: string[]
+  /** 机械钥匙保管位置与保管人（门禁失效时启用，不能只依赖扫码出门） */
+  mechanicalKeyLocation: string
+  mechanicalKeyHolder: string
+  /** 停电疏散集合点 */
+  assemblyPoint: string
+  /** 疏散路线（从馆内到集合点） */
+  evacuationRoutes: { zone: string; route: string }[]
 }
 
 export type EntryMethod = 'idcard' | 'card' | 'reservation'
@@ -172,6 +184,10 @@ export type DeviceType =
   | 'audio' // 异常声音监测
   | 'help' // 读者求助按钮
   | 'ups' // 应急电源/UPS
+  | 'elight' // 应急照明灯
+  | 'exitsign' // 疏散指示标志灯
+  | 'smoke' // 烟感探测器
+  | 'vent' // 新风系统
 
 export type DeviceStatus = 'normal' | 'fault' | 'off' | 'full' | 'online' | 'offline' | 'alarm'
 
@@ -426,6 +442,8 @@ export interface HandoverSnapshot {
   strandedVisitIds: string[]
   /** 随档案跨日移交的未修复设备故障工单 id（照片/报修时间/影响/联系人保留到次日） */
   carriedFaultIds: string[]
+  /** 本夜间发生的停电应急处置单 id（复盘/跨日交接可追溯） */
+  blackoutEventIds: string[]
 }
 
 export interface Inspection {
@@ -524,4 +542,257 @@ export interface LostItem {
   status: 'kept' | 'claimed'
   claimant?: string
   incidentId?: string
+}
+
+// ============================================================
+// 突发停电与门禁消防应急联动
+// ============================================================
+
+/** 停电应急阶段 */
+export type BlackoutPhase =
+  | 'idle' // 供电正常
+  | 'blackout' // 停电中：应急视图
+  | 'urgent' // 停电中且已升级为紧急事件（被困/通道被占/烟感离线/应急灯不亮）
+  | 'recovered' // 来电：设备自检/恢复确认中
+  | 'closed' // 本次停电处置已闭环（含复盘）
+
+/** 门禁处置方式 */
+export type GateFallback = 'none' | 'mechanical-key' | 'temp-open'
+
+/** 应急影响项的状态（受影响矩阵逐项核验） */
+export type ImpactState =
+  | 'unknown' // 待核验
+  | 'ok' // 正常/已点亮/UPS 支撑
+  | 'affected' // 受影响（失效/离线/停止）
+  | 'confirmed-on' // 已人工确认正常（应急灯点亮、消防主机正常等）
+  | 'confirmed-off' // 已人工确认异常（应急灯不亮等，触发紧急升级）
+
+export type ImpactKey =
+  | 'gate' // 门禁是否失效
+  | 'elight' // 应急照明
+  | 'exitsign' // 疏散指示
+  | 'kiosk' // 自助借还机
+  | 'printer' // 打印机
+  | 'firepanel' // 消防主机
+  | 'smoke' // 烟感
+  | 'camera' // 摄像头
+  | 'audio' // 异常声音监测
+  | 'ac' // 空调
+  | 'vent' // 新风
+
+/** 应急影响项 */
+export interface BlackoutImpact {
+  key: ImpactKey
+  label: string
+  /** 停电后理论状态：ups=UPS 应支撑，off=市电设备停止 */
+  expect: 'ups' | 'off'
+  state: ImpactState
+  deviceIds: string[]
+  /** 受影响说明（如“门禁失效，扫码不能出门”） */
+  detail: string
+  checkedBy?: string
+  checkedAt?: number
+}
+
+/** 紧急事件升级原因 */
+export type UrgentReason =
+  | 'trapped' // 有人被困（电梯/卫生间/书库）
+  | 'fire-exit-blocked' // 消防通道被占用
+  | 'smoke-offline' // 烟感离线
+  | 'elight-off' // 应急灯不亮
+
+/** 紧急升级记录 */
+export interface UrgentEscalation {
+  reason: UrgentReason
+  label: string
+  detail: string
+  at: number
+  by: string
+  streetNotified: boolean
+  fireNotified: boolean
+  resolved: boolean
+  resolvedAt?: number
+  resolvedBy?: string
+  resolveNote?: string
+  incidentId?: string
+}
+
+/** 停电期间读者求助 */
+export interface BlackoutHelp {
+  id: string
+  at: number
+  /** 求助读者（在馆为 visit，读者端匿名提交为姓名描述） */
+  visitId?: string
+  readerName: string
+  zone: string
+  kind: 'trapped' | 'injury' | 'separated' | 'route' | 'other'
+  content: string
+  status: 'new' | 'handling' | 'resolved'
+  handledBy?: string
+  handledAt?: number
+  result?: string
+}
+
+/** 停电期间暂存的借还请求（本地暂存/待补录，不把读者算逾期或借阅失败） */
+export interface PendingLoan {
+  id: string
+  /** 读者操作实际发生时间（补录按此时间，不按补录时刻） */
+  opAt: number
+  recordedAt: number
+  operator: string
+  readerName: string
+  bookBarcode: string
+  bookTitle: string
+  kind: 'borrow' | 'return'
+  /** 发生时设备编号（来电后按设备编号补回该设备流水） */
+  deviceId: string
+  deviceName: string
+  zone: string
+  note?: string
+  /** 补录状态 */
+  status: 'pending' | 'backfilled' | 'conflict'
+  backfilledAt?: number
+  backfilledBy?: string
+}
+
+/** 停电期间分区在馆人数清点 */
+export interface BlackoutHeadcount {
+  zone: string
+  /** 系统在馆记录数 */
+  systemCount: number
+  /** 现场清点人数 */
+  actualCount?: number
+  countedBy?: string
+  countedAt?: number
+  note?: string
+}
+
+/** 夜间来电恢复逐项确认（人员清场/门窗/消防通道/应急照明/门禁恢复/摄像头回传） */
+export type NightRecoverKey =
+  | 'people-clear'
+  | 'doors'
+  | 'fire-exit'
+  | 'elight'
+  | 'gate-recover'
+  | 'camera-back'
+
+export interface NightRecoverItem {
+  key: NightRecoverKey
+  label: string
+  state: 'pending' | 'ok' | 'abnormal'
+  confirmedBy?: string
+  confirmedAt?: number
+  note?: string
+}
+
+/** 来电设备自检项 */
+export type SelfTestKey =
+  | 'demag' // 图书消磁
+  | 'returnbox' // 还书箱
+  | 'kiosk' // 自助机
+  | 'gate' // 门禁
+  | 'camera' // 摄像头回传
+  | 'fire' // 消防/烟感联网
+  | 'ac' // 空调新风
+  | 'elight' // 应急照明退出应急
+
+export interface BlackoutSelfTestItem {
+  key: SelfTestKey
+  label: string
+  state: 'pending' | 'pass' | 'fail'
+  checkedBy?: string
+  checkedAt?: number
+  note?: string
+  /** 自检失败生成的跨日故障工单 id */
+  faultId?: string
+}
+
+/** 停电复盘记录（停电时间、影响范围、读者求助、处置责任、改进项） */
+export interface BlackoutReview {
+  filledAt?: number
+  filledBy?: string
+  outageStart?: number
+  outageEnd?: number
+  durationMin?: number
+  scope?: string
+  helpSummary?: string
+  responsibility?: string
+  improvements: string[]
+}
+
+/** 一次突发停电的完整应急处置单（每馆同时仅一处于非闭环状态） */
+export interface BlackoutEvent {
+  id: string
+  no: string
+  libraryId: string
+  /** 停电小区/供电范围 */
+  community: string
+  phase: BlackoutPhase
+  startedAt: number
+  /** 实际来电时间 */
+  restoredAt?: number
+  /** 闭环时间（复盘完成） */
+  closedAt?: number
+  night: boolean
+  /** 受影响范围逐项核验 */
+  impacts: BlackoutImpact[]
+  /** 分区在馆人数清点 */
+  headcounts: BlackoutHeadcount[]
+  /** 门禁失效联动 */
+  gateFailed: boolean
+  gateNotifiedSecurityAt?: number
+  gateFallback: GateFallback
+  gateFallbackBy?: string
+  gateFallbackAt?: number
+  gateFallbackNote?: string
+  /** 紧急升级（任一未解除即紧急事件，巡检不允许完成） */
+  escalations: UrgentEscalation[]
+  streetNotified: boolean
+  streetNotifiedAt?: number
+  fireNotified: boolean
+  fireNotifiedAt?: number
+  helps: BlackoutHelp[]
+  pendingLoans: PendingLoan[]
+  /** 空调停运计时 */
+  acStoppedAt?: number
+  /** 空调停运阈值（分钟），超过提醒评估提前闭馆 */
+  acThresholdMin: number
+  earlyCloseAssessed: boolean
+  earlyClose: boolean
+  earlyCloseBy?: string
+  earlyCloseAt?: number
+  reservationNotifiedAt?: number
+  reservationNotifiedCount?: number
+  /** 夜间停电恢复逐项确认 */
+  nightItems: NightRecoverItem[]
+  /** 来电自检 */
+  selfTests: BlackoutSelfTestItem[]
+  /** 自检失败进入跨日交接的故障工单 id */
+  carriedFaultIds: string[]
+  /** 关联的停电主事件 id */
+  incidentId?: string
+  /** 停电瞬间全部设备状态快照（来电后按快照并结合自检恢复，故障/离线不被掩盖） */
+  deviceSnapshot: { id: string; status: DeviceStatus; note?: string; level?: number }[]
+  /** 处置进展时间线 */
+  logs: BlackoutLog[]
+  review?: BlackoutReview
+}
+
+export interface BlackoutLog {
+  at: number
+  actor: string
+  role: Role | 'system' | 'street'
+  text: string
+}
+
+/** 街道值班视角下跨书房停电汇总行 */
+export interface StreetBlackoutRow {
+  event: BlackoutEvent
+  libraryName: string
+  address: string
+  community: string
+  people: number
+  phase: BlackoutPhase
+  urgent: boolean
+  startedAt: number
 }

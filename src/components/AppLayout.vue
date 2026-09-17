@@ -6,6 +6,7 @@ import { useAuthStore, roleNames } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 import { useIncidentStore } from '@/stores/incident'
 import { useBranchStore } from '@/stores/branch'
+import { useBlackoutStore } from '@/stores/blackout'
 import { fmtCountdown, fmtTime } from '@/utils/format'
 import { resetDemoData } from '@/stores/persist'
 import IncidentDrawer from '@/components/IncidentDrawer.vue'
@@ -22,6 +23,7 @@ const auth = useAuthStore()
 const system = useSystemStore()
 const incidents = useIncidentStore()
 const branch = useBranchStore()
+const blackout = useBlackoutStore()
 const { now } = storeToRefs(system)
 const incidentViewer = useIncidentViewer()
 const globalIncident = incidentViewer.incident
@@ -29,10 +31,28 @@ const globalIncident = incidentViewer.incident
 const nav = computed(() => {
   const role = auth.account?.role
   const lib = system.currentLibraryId
+
+  // 街道值班：聚焦跨书房停电应急联动（可看总览/事件/设备，不参与馆内操作）
+  if (role === 'street') {
+    return [
+      { group: '应急联动', children: [
+        { to: '/street', ico: '🏙️', label: '街道值班联动台' },
+        { to: '/emergency', ico: '⚡', label: '停电应急指挥（只读）', badge: blackout.hasActiveAny ? blackout.streetRows.length : 0 },
+        { to: '/reader/emergency', ico: '👁️', label: '读者应急端（预览）' }
+      ]},
+      { group: '查看', children: [
+        { to: '/dashboard', ico: '🏠', label: '运行总览' },
+        { to: '/incidents', ico: '🚨', label: '事件协同中心', badge: incidents.openCount(lib) },
+        { to: '/devices', ico: '📹', label: '设备与技防' }
+      ]}
+    ]
+  }
+
   const items = [
     { group: '运营总览', children: [
       { to: '/dashboard', ico: '🏠', label: '运行总览' },
       { to: '/service', ico: '🎫', label: '读者服务台' },
+      { to: '/emergency', ico: '⚡', label: '停电应急联动', badge: blackout.activeOf(lib) ? 1 : 0 },
       { to: '/incidents', ico: '🚨', label: '事件协同中心', badge: incidents.openCount(lib) }
     ]},
     { group: '夜间闭馆', children: [
@@ -61,6 +81,7 @@ const nav = computed(() => {
 })
 
 const activeVisits = computed(() => branch.activeVisits(system.currentLibraryId))
+const boEvent = computed(() => blackout.activeOf(system.currentLibraryId))
 const carryCount = computed(
   () => incidents.carryOverIncidents.filter((i) => i.libraryId === system.currentLibraryId).length
 )
@@ -119,7 +140,7 @@ function resetDemo() {
             :class="{ active: l.id === system.currentLibraryId }"
             @click="system.switchLibrary(l.id)"
           >
-            <span class="dot" :class="system.blackout ? 'dot-blackout' : l.status === 'open' ? 'dot-open' : l.status === 'closing' ? 'dot-closing' : 'dot-closed'"></span>
+            <span class="dot" :class="blackout.activeOf(l.id) ? 'dot-blackout' : l.status === 'open' ? 'dot-open' : l.status === 'closing' ? 'dot-closing' : 'dot-closed'"></span>
             {{ l.name.replace('城市书房', '') }}
           </button>
         </div>
@@ -148,10 +169,17 @@ function resetDemo() {
             <RouterLink to="/incidents">前往事件中心处理 →</RouterLink>
           </div>
         </div>
-        <div v-if="system.blackout" class="banner blackout">
+        <div v-if="boEvent" class="banner" :class="boEvent.phase === 'urgent' ? 'blackout' : 'danger'">
           <span>⚡</span>
-          <div><b>突发停电！</b>应急照明/UPS 已启动，请按停电预案：稳控读者、清点人数、联系供电、上报街道。</div>
-          <RouterLink class="btn amber sm" to="/incidents">查看停电事件</RouterLink>
+          <div>
+            <b>{{ boEvent.phase === 'urgent' ? '停电紧急事件处置中' : '突发停电应急处置中' }}</b>
+            （{{ boEvent.no }}）· 应急照明/UPS 已启动；在馆 <b>{{ blackout.peopleCount(boEvent) }}</b> 人 ·
+            门禁{{ boEvent.gateFailed ? '已失效（机械钥匙/临时开门）' : 'UPS 维持' }}
+            <span v-if="boEvent.escalations.some(e => !e.resolved)" class="pulse-dot"></span>
+            <span v-if="boEvent.escalations.some(e => !e.resolved)" class="bad-text"><b>紧急事件未解除，巡检不允许完成</b></span>
+          </div>
+          <a class="btn ghost sm" :href="'#/reader/emergency'" target="_blank">👁️ 读者端</a>
+          <RouterLink class="btn amber sm" to="/emergency">进入应急指挥 →</RouterLink>
         </div>
         <slot />
       </main>
